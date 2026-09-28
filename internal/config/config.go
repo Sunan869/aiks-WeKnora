@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -314,12 +315,21 @@ type OIDCUserInfoMapping struct {
 	Email    string `yaml:"email"    json:"email"`
 }
 
+type DingTalkDepartmentOrganizationMapping struct {
+	DepartmentID  int64               `yaml:"department_id"  json:"department_id"`
+	OrganizationID string              `yaml:"organization_id" json:"organization_id"`
+	Role           types.OrgMemberRole `yaml:"role"           json:"role"`
+}
+
 type DingTalkAuthConfig struct {
-	Enable              bool   `yaml:"enable"                json:"enable"`
-	ProviderDisplayName string `yaml:"provider_display_name" json:"provider_display_name"`
-	ClientID            string `yaml:"client_id"             json:"client_id"`
-	ClientSecret        string `yaml:"client_secret"         json:"-"`
-	CorpID              string `yaml:"corp_id"               json:"corp_id"`
+	Enable                         bool                                    `yaml:"enable"                          json:"enable"`
+	ProviderDisplayName            string                                  `yaml:"provider_display_name"           json:"provider_display_name"`
+	ClientID                       string                                  `yaml:"client_id"                       json:"client_id"`
+	ClientSecret                   string                                  `yaml:"client_secret"                   json:"-"`
+	CorpID                         string                                  `yaml:"corp_id"                         json:"corp_id"`
+	SyncDepartments                bool                                    `yaml:"sync_departments"                json:"sync_departments"`
+	DepartmentOrganizationMappings []DingTalkDepartmentOrganizationMapping `yaml:"department_organization_mappings" json:"department_organization_mappings"`
+	DepartmentMappingsParseError   string                                  `yaml:"-"                               json:"-"`
 }
 
 type OIDCAuthConfig struct {
@@ -640,6 +650,30 @@ func ValidateConfig(cfg *Config) error {
 		if strings.TrimSpace(cfg.DingTalkAuth.ClientSecret) == "" {
 			errs = append(errs, "dingtalk_auth.client_secret is required when DingTalk login is enabled")
 		}
+		if cfg.DingTalkAuth.DepartmentMappingsParseError != "" {
+			errs = append(errs, cfg.DingTalkAuth.DepartmentMappingsParseError)
+		}
+		if cfg.DingTalkAuth.SyncDepartments {
+			if strings.TrimSpace(cfg.DingTalkAuth.CorpID) == "" {
+				errs = append(errs, "dingtalk_auth.corp_id is required when department sync is enabled")
+			}
+			if len(cfg.DingTalkAuth.DepartmentOrganizationMappings) == 0 {
+				errs = append(errs, "dingtalk_auth.department_organization_mappings is required when department sync is enabled")
+			}
+		}
+		for i, mapping := range cfg.DingTalkAuth.DepartmentOrganizationMappings {
+			if mapping.DepartmentID <= 0 {
+				errs = append(errs, fmt.Sprintf("dingtalk_auth.department_organization_mappings[%d].department_id must be > 0", i))
+			}
+			if strings.TrimSpace(mapping.OrganizationID) == "" {
+				errs = append(errs, fmt.Sprintf("dingtalk_auth.department_organization_mappings[%d].organization_id is required", i))
+			}
+			if mapping.Role != types.OrgRoleViewer && mapping.Role != types.OrgRoleEditor {
+				errs = append(errs, fmt.Sprintf(
+				"dingtalk_auth.department_organization_mappings[%d].role must be viewer or editor", i,
+			))
+			}
+		}
 	}
 
 	if cfg.OIDCAuth != nil && cfg.OIDCAuth.Enable {
@@ -796,6 +830,25 @@ func applyDingTalkAuthEnvOverrides(cfg *Config) {
 	}
 	if value := strings.TrimSpace(os.Getenv("DINGTALK_AUTH_CORP_ID")); value != "" {
 		cfg.DingTalkAuth.CorpID = value
+	}
+	if value := strings.TrimSpace(os.Getenv("DINGTALK_AUTH_SYNC_DEPARTMENTS")); value != "" {
+		cfg.DingTalkAuth.SyncDepartments = strings.EqualFold(value, "true")
+	}
+	if value := strings.TrimSpace(os.Getenv("DINGTALK_AUTH_DEPARTMENT_ORGANIZATION_MAPPINGS")); value != "" {
+		var mappings []DingTalkDepartmentOrganizationMapping
+		if err := json.Unmarshal([]byte(value), &mappings); err != nil {
+			cfg.DingTalkAuth.DepartmentMappingsParseError =
+				"DINGTALK_AUTH_DEPARTMENT_ORGANIZATION_MAPPINGS must be valid JSON: " + err.Error()
+		} else {
+			cfg.DingTalkAuth.DepartmentOrganizationMappings = mappings
+		}
+	}
+	for i := range cfg.DingTalkAuth.DepartmentOrganizationMappings {
+		cfg.DingTalkAuth.DepartmentOrganizationMappings[i].OrganizationID =
+			strings.TrimSpace(cfg.DingTalkAuth.DepartmentOrganizationMappings[i].OrganizationID)
+		if cfg.DingTalkAuth.DepartmentOrganizationMappings[i].Role == "" {
+			cfg.DingTalkAuth.DepartmentOrganizationMappings[i].Role = types.OrgRoleViewer
+		}
 	}
 	if strings.TrimSpace(cfg.DingTalkAuth.ProviderDisplayName) == "" {
 		cfg.DingTalkAuth.ProviderDisplayName = "钉钉"
