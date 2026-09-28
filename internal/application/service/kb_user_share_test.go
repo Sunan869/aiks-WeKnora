@@ -117,9 +117,9 @@ func directShareContext(userID string, role types.TenantRole) context.Context {
 func TestDirectUserShareUpsertsAndRejectsAdmin(t *testing.T) {
 	users := newDirectUserShareRepo()
 	svc := &kbShareService{
-		shareRepo: directOrgShareRepo{},
+		shareRepo:     directOrgShareRepo{},
 		userShareRepo: users,
-		kbRepo: directShareKBRepo{kb: &types.KnowledgeBase{ID: "kb-1", TenantID: 10}},
+		kbRepo:        directShareKBRepo{kb: &types.KnowledgeBase{ID: "kb-1", TenantID: 10}},
 	}
 
 	share, err := svc.ShareKnowledgeBaseToUser(
@@ -149,9 +149,9 @@ func TestDirectUserShareIsIdentityScopedAndViewerCapped(t *testing.T) {
 		SourceTenantID: 10, Permission: types.OrgRoleEditor,
 	}
 	svc := &kbShareService{
-		shareRepo: directOrgShareRepo{},
+		shareRepo:     directOrgShareRepo{},
 		userShareRepo: users,
-		kbRepo: directShareKBRepo{kb: &types.KnowledgeBase{ID: "kb-1", TenantID: 10}},
+		kbRepo:        directShareKBRepo{kb: &types.KnowledgeBase{ID: "kb-1", TenantID: 10}},
 	}
 
 	role, shared, err := svc.CheckTenantKBPermission(
@@ -182,9 +182,9 @@ func TestDirectUserShareRecipientCannotMutateOwnerGrant(t *testing.T) {
 		SharedByUserID: "owner", SourceTenantID: 10, Permission: types.OrgRoleViewer,
 	}
 	svc := &kbShareService{
-		shareRepo: directOrgShareRepo{},
+		shareRepo:     directOrgShareRepo{},
 		userShareRepo: users,
-		kbRepo: directShareKBRepo{kb: &types.KnowledgeBase{ID: "kb-1", TenantID: 10}},
+		kbRepo:        directShareKBRepo{kb: &types.KnowledgeBase{ID: "kb-1", TenantID: 10}},
 	}
 	ctx := directShareContext("alice", types.TenantRoleAdmin)
 	err := svc.UpdateUserSharePermission(ctx, "kb-1", "share-1", types.OrgRoleEditor, "alice", 20)
