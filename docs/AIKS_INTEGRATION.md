@@ -19,7 +19,8 @@ Content-Type: application/json
   "title": "Session title",
   "content": "# Session title\n...",
   "status": "publish",
-  "channel": "aiks"
+  "channel": "aiks",
+  "external_id": "aiks-<sha256(source + session-id)>"
 }
 ```
 
@@ -50,3 +51,12 @@ Session-to-Markdown rendering and delivery/retry state.
 
 Do not duplicate WeKnora RBAC, audit, RAG, vector-search or Wiki logic in
 `aiks-service`.
+
+
+## Stable source identity
+
+The fork extends manual-knowledge metadata with an optional `external_id`.
+It is accepted only for the `aiks` channel and must use the fixed
+`aiks-` + 64 lowercase hex format. Updates preserve the identifier and reject
+attempts to change it. This keeps AIKS source identity server-side without
+putting raw local Session IDs into WeKnora metadata.

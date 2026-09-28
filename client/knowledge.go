@@ -849,16 +849,18 @@ func (c *Client) UpdateImageInfo(ctx context.Context,
 
 // CreateManualKnowledgeRequest contains the parameters for creating a manual Markdown knowledge entry.
 type CreateManualKnowledgeRequest struct {
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	TagID   string `json:"tag_id,omitempty"`
-	Channel string `json:"channel,omitempty"`
+	Title      string `json:"title"`
+	Content    string `json:"content"`
+	TagID      string `json:"tag_id,omitempty"`
+	Channel    string `json:"channel,omitempty"`
+	ExternalID string `json:"external_id,omitempty"`
 }
 
 // UpdateManualKnowledgeRequest contains the parameters for updating a manual Markdown knowledge entry.
 type UpdateManualKnowledgeRequest struct {
-	Title   string `json:"title,omitempty"`
-	Content string `json:"content,omitempty"`
+	Title      string `json:"title,omitempty"`
+	Content    string `json:"content,omitempty"`
+	ExternalID string `json:"external_id,omitempty"`
 }
 
 // BatchUpdateKnowledgeTagsRequest contains the mapping of knowledge IDs to tag IDs.

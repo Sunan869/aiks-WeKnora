@@ -169,7 +169,7 @@ func (s *knowledgeService) CreateKnowledgeFromFile(ctx context.Context,
 		TenantID:         tenantID,
 		KnowledgeBaseID:  kbID,
 		Type:             "file",
-		Channel:          defaultChannel(channel),
+		Channel:          normalizedChannel,
 		Title:            safeFilename,
 		FileName:         safeFilename,
 		FolderPath:       folderPath,
@@ -767,6 +767,12 @@ func (s *knowledgeService) CreateKnowledgeFromManual(ctx context.Context,
 		return nil, werrors.NewValidationError("状态仅支持 draft 或 publish")
 	}
 
+	normalizedChannel := defaultChannel(channel)
+	externalID, err := validateManualExternalID(normalizedChannel, payload.ExternalID)
+	if err != nil {
+		return nil, err
+	}
+
 	kb, err := s.kbService.GetKnowledgeBaseByID(ctx, kbID)
 	if err != nil {
 		logger.Errorf(ctx, "Failed to get knowledge base: %v", err)
@@ -786,6 +792,7 @@ func (s *knowledgeService) CreateKnowledgeFromManual(ctx context.Context,
 
 	fileName := ensureManualFileName(title)
 	meta := types.NewManualKnowledgeMetadata(cleanContent, status, 1)
+	meta.ExternalID = externalID
 
 	knowledge := &types.Knowledge{
 		TenantID:         tenantID,
@@ -1044,13 +1051,26 @@ func (s *knowledgeService) UpdateManualKnowledge(ctx context.Context,
 	tenantID := existing.TenantID
 
 	var version int
-	if meta, err := existing.ManualMetadata(); err == nil && meta != nil {
-		version = meta.Version + 1
+	externalID := ""
+	if previous, err := existing.ManualMetadata(); err == nil && previous != nil {
+		version = previous.Version + 1
+		externalID = previous.ExternalID
 	} else {
 		version = 1
 	}
+	if strings.TrimSpace(payload.ExternalID) != "" {
+		incomingExternalID, err := validateManualExternalID(existing.Channel, payload.ExternalID)
+		if err != nil {
+			return nil, err
+		}
+		if externalID != "" && incomingExternalID != externalID {
+			return nil, werrors.NewValidationError("external_id 不允许修改")
+		}
+		externalID = incomingExternalID
+	}
 
 	meta := types.NewManualKnowledgeMetadata(cleanContent, status, version)
+	meta.ExternalID = externalID
 	if err := existing.SetManualMetadata(meta); err != nil {
 		logger.Errorf(ctx, "Failed to set manual metadata during update: %v", err)
 		return nil, err
@@ -1173,6 +1193,26 @@ func usesSourceIdentityDuplicateCheck(channel string) bool {
 	default:
 		return false
 	}
+}
+
+func validateManualExternalID(channel, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if channel != types.ChannelAIKS {
+		return "", werrors.NewValidationError("external_id 仅支持 AIKS 渠道")
+	}
+	const prefix = "aiks-"
+	if len(value) != len(prefix)+64 || !strings.HasPrefix(value, prefix) {
+		return "", werrors.NewValidationError("AIKS external_id 格式无效")
+	}
+	for _, ch := range strings.TrimPrefix(value, prefix) {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
+			return "", werrors.NewValidationError("AIKS external_id 格式无效")
+		}
+	}
+	return value, nil
 }
 
 func ensureManualFileName(title string) string {

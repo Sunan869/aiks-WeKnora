@@ -317,11 +317,12 @@ func (k *Knowledge) BeforeCreate(tx *gorm.DB) (err error) {
 
 // ManualKnowledgeMetadata stores metadata for manual Markdown knowledge content.
 type ManualKnowledgeMetadata struct {
-	Content   string `json:"content"`
-	Format    string `json:"format"`
-	Status    string `json:"status"`
-	Version   int    `json:"version"`
-	UpdatedAt string `json:"updated_at"`
+	Content    string `json:"content"`
+	Format     string `json:"format"`
+	Status     string `json:"status"`
+	Version    int    `json:"version"`
+	UpdatedAt  string `json:"updated_at"`
+	ExternalID string `json:"external_id,omitempty"`
 }
 
 // ManualKnowledgePayload represents the payload for manual knowledge operations.
@@ -331,6 +332,7 @@ type ManualKnowledgePayload struct {
 	Status        string                     `json:"status"`
 	TagIDs        []string                   `json:"tag_ids"`
 	Channel       string                     `json:"channel"`
+	ExternalID    string                     `json:"external_id,omitempty"`
 	ProcessConfig *KnowledgeProcessOverrides `json:"process_config,omitempty"`
 }
 
