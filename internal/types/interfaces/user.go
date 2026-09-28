@@ -14,6 +14,8 @@ type UserService interface {
 	Login(ctx context.Context, req *types.LoginRequest) (*types.LoginResponse, error)
 	// GetOIDCAuthorizationURL builds the third-party OIDC authorization URL
 	GetOIDCAuthorizationURL(ctx context.Context, redirectURI string) (*types.OIDCAuthURLResponse, error)
+	GetDingTalkAuthorizationURL(ctx context.Context, redirectURI string) (*types.DingTalkAuthURLResponse, error)
+	LoginWithDingTalk(ctx context.Context, authCode, redirectURI string, provisioning types.TenantProvisioningMode) (*types.OIDCCallbackResponse, error)
 	// LoginWithOIDC exchanges the callback code, auto-provisions users if needed, and completes login.
 	// provisioning is the default tenant mode for a newly auto-created user
 	// (resolved by the caller from auth.default_tenant_mode).
@@ -116,6 +118,8 @@ type UserRepository interface {
 	GetUsersByIDs(ctx context.Context, ids []string) (map[string]*types.User, error)
 	// GetUserByEmail gets a user by email
 	GetUserByEmail(ctx context.Context, email string) (*types.User, error)
+	GetUserByExternalIdentity(ctx context.Context, provider, subject string) (*types.User, error)
+	BindExternalIdentity(ctx context.Context, identity *types.ExternalIdentity) error
 	// GetUserByUsername gets a user by username
 	GetUserByUsername(ctx context.Context, username string) (*types.User, error)
 	// GetUserByTenantID gets the first user (owner) of a tenant
