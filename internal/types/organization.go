@@ -252,7 +252,7 @@ type SharedKnowledgeBaseInfo struct {
 	Permission     OrgMemberRole  `json:"permission"`
 	SourceTenantID uint64         `json:"source_tenant_id"`
 	SharedAt       time.Time      `json:"shared_at"`
-	ShareKind      string         `json:"share_kind,omitempty"`       // organization | user
+	ShareKind      string         `json:"share_kind,omitempty"` // organization | user
 	SharedToUserID string         `json:"shared_to_user_id,omitempty"`
 }
 
@@ -512,15 +512,15 @@ type KnowledgeBaseShareResponse struct {
 
 // KnowledgeBaseUserShareResponse is the owner-side projection of a direct share.
 type KnowledgeBaseUserShareResponse struct {
-	ID             string    `json:"id"`
+	ID              string    `json:"id"`
 	KnowledgeBaseID string    `json:"knowledge_base_id"`
-	TargetUserID   string    `json:"target_user_id"`
-	TargetUsername string    `json:"target_username,omitempty"`
-	TargetEmail    string    `json:"target_email,omitempty"`
-	SharedByUserID string    `json:"shared_by_user_id"`
-	SourceTenantID uint64    `json:"source_tenant_id"`
-	Permission     string    `json:"permission"`
-	CreatedAt      time.Time `json:"created_at"`
+	TargetUserID    string    `json:"target_user_id"`
+	TargetUsername  string    `json:"target_username,omitempty"`
+	TargetEmail     string    `json:"target_email,omitempty"`
+	SharedByUserID  string    `json:"shared_by_user_id"`
+	SourceTenantID  uint64    `json:"source_tenant_id"`
+	Permission      string    `json:"permission"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // AgentShareResponse represents an agent share record in API responses
