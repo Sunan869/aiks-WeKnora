@@ -69,3 +69,16 @@ A request using `channel: "aiks"` must include a valid stable
 `external_id` and may carry up to 2,000,000 characters. This larger budget
 is isolated to the AIKS ingestion contract so normal editor/API behavior is
 unchanged.
+
+
+## Idempotent create / replay
+
+For AIKS manual ingestion, `external_id` is the source identity inside the
+destination knowledge base. A repeated POST with the same identifier:
+
+- returns the existing knowledge immediately when title/content/status are unchanged and the row is healthy;
+- routes changed content to `UpdateManualKnowledge`;
+- routes a previously failed row through update/reprocessing instead of falsely acknowledging it as complete.
+
+This closes the normal sequential retry window where WeKnora committed a POST
+but the caller lost the HTTP response before persisting the returned knowledge ID.

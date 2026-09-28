@@ -52,3 +52,26 @@ func TestManualContentLimitKeepsAIKSSeparateFromNormalManualInput(t *testing.T) 
 		t.Fatal("AIKS limit must be larger than the interactive manual limit")
 	}
 }
+
+func TestSameAIKSManualReplayRequiresHealthyEquivalentDocument(t *testing.T) {
+	meta := types.NewManualKnowledgeMetadata("# body", types.ManualKnowledgeStatusPublish, 1)
+	knowledge := &types.Knowledge{
+		Title:       "Session",
+		Channel:     types.ChannelAIKS,
+		ParseStatus: "completed",
+	}
+	if err := knowledge.SetManualMetadata(meta); err != nil {
+		t.Fatal(err)
+	}
+	if !sameAIKSManualReplay(knowledge, "# body", types.ManualKnowledgeStatusPublish, "Session") {
+		t.Fatal("equivalent healthy replay was not recognized")
+	}
+	knowledge.ParseStatus = "failed"
+	if sameAIKSManualReplay(knowledge, "# body", types.ManualKnowledgeStatusPublish, "Session") {
+		t.Fatal("failed document must be reprocessed instead of accepted as an idempotent replay")
+	}
+	knowledge.ParseStatus = "completed"
+	if sameAIKSManualReplay(knowledge, "# changed", types.ManualKnowledgeStatusPublish, "Session") {
+		t.Fatal("changed content must update the existing knowledge")
+	}
+}

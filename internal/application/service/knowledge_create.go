@@ -808,9 +808,7 @@ func (s *knowledgeService) CreateKnowledgeFromManual(ctx context.Context,
 			if existing.Channel != types.ChannelAIKS || !existing.IsManual() {
 				return nil, werrors.NewValidationError("external_id 已被非 AIKS 手工知识占用")
 			}
-			if previous, err := existing.ManualMetadata(); err == nil && previous != nil &&
-				previous.Content == cleanContent && previous.Status == status &&
-				existing.Title == title && existing.ParseStatus != "failed" {
+			if sameAIKSManualReplay(existing, cleanContent, status, title) {
 				return existing, nil
 			}
 			return s.UpdateManualKnowledge(ctx, existing.ID, payload)
@@ -1220,6 +1218,14 @@ func usesSourceIdentityDuplicateCheck(channel string) bool {
 	default:
 		return false
 	}
+}
+
+func sameAIKSManualReplay(existing *types.Knowledge, content, status, title string) bool {
+	if existing == nil || existing.ParseStatus == "failed" || existing.Title != title {
+		return false
+	}
+	previous, err := existing.ManualMetadata()
+	return err == nil && previous != nil && previous.Content == content && previous.Status == status
 }
 
 func manualContentLimit(channel string) int {
