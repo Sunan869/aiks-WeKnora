@@ -24,7 +24,7 @@ echo "[INFO] building $FRONTEND_IMAGE"
 docker buildx build --platform "$PLATFORM" --load   --build-arg VITE_FRONTEND_COMMIT="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"   --build-arg NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"   -t "$FRONTEND_IMAGE"   "${ROOT_DIR}/frontend"
 
 echo "[INFO] building $DOCREADER_IMAGE"
-docker buildx build --platform "$PLATFORM" --load   --build-arg APT_MIRROR="${APT_MIRROR:-mirrors.aliyun.com}"   -t "$DOCREADER_IMAGE"   -f "${ROOT_DIR}/docker/Dockerfile.docreader"   "$ROOT_DIR"
+docker buildx build --platform "$PLATFORM" --load   --build-arg APT_MIRROR="${APT_MIRROR:-http://mirrors.aliyun.com}"   -t "$DOCREADER_IMAGE"   -f "${ROOT_DIR}/docker/Dockerfile.docreader"   "$ROOT_DIR"
 
 for image in "$POSTGRES_IMAGE" "$REDIS_IMAGE"; do
   if ! docker image inspect "$image" >/dev/null 2>&1; then
