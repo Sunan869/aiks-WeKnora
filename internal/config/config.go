@@ -24,6 +24,7 @@ type Config struct {
 	Auth            *AuthConfig            `yaml:"auth"             json:"auth"`
 	Audit           *AuditConfig           `yaml:"audit"            json:"audit"`
 	OIDCAuth        *OIDCAuthConfig        `yaml:"oidc_auth"        json:"oidc_auth"`
+	DingTalkAuth    *DingTalkAuthConfig    `yaml:"dingtalk_auth"    json:"dingtalk_auth"`
 	Models          []ModelConfig          `yaml:"models"           json:"models"`
 	VectorDatabase  *VectorDatabaseConfig  `yaml:"vector_database"  json:"vector_database"`
 	DocReader       *DocReaderConfig       `yaml:"docreader"        json:"docreader"`
@@ -313,6 +314,14 @@ type OIDCUserInfoMapping struct {
 	Email    string `yaml:"email"    json:"email"`
 }
 
+type DingTalkAuthConfig struct {
+	Enable              bool   `yaml:"enable"                json:"enable"`
+	ProviderDisplayName string `yaml:"provider_display_name" json:"provider_display_name"`
+	ClientID            string `yaml:"client_id"             json:"client_id"`
+	ClientSecret        string `yaml:"client_secret"         json:"-"`
+	CorpID              string `yaml:"corp_id"               json:"corp_id"`
+}
+
 type OIDCAuthConfig struct {
 	Enable                bool                 `yaml:"enable"                 json:"enable"`
 	IssuerURL             string               `yaml:"issuer_url"             json:"issuer_url"`
@@ -588,6 +597,7 @@ func LoadConfig() (*Config, error) {
 
 	// Validate configuration values
 	applyOIDCEnvOverrides(&cfg)
+	applyDingTalkAuthEnvOverrides(&cfg)
 	applyAgentEnvOverrides(&cfg)
 	applyKnowledgeBaseEnvOverrides(&cfg)
 	applyAuthAndTenantDefaults(&cfg)
@@ -622,6 +632,15 @@ func LoadConfig() (*Config, error) {
 // It checks for obviously invalid or missing values that would cause runtime failures.
 func ValidateConfig(cfg *Config) error {
 	var errs []string
+
+	if cfg.DingTalkAuth != nil && cfg.DingTalkAuth.Enable {
+		if strings.TrimSpace(cfg.DingTalkAuth.ClientID) == "" {
+			errs = append(errs, "dingtalk_auth.client_id is required when DingTalk login is enabled")
+		}
+		if strings.TrimSpace(cfg.DingTalkAuth.ClientSecret) == "" {
+			errs = append(errs, "dingtalk_auth.client_secret is required when DingTalk login is enabled")
+		}
+	}
 
 	if cfg.OIDCAuth != nil && cfg.OIDCAuth.Enable {
 		if strings.TrimSpace(cfg.OIDCAuth.ClientID) == "" {
@@ -756,6 +775,30 @@ func applyOIDCEnvOverrides(cfg *Config) {
 	}
 	if cfg.OIDCAuth.DiscoveryURL == "" && cfg.OIDCAuth.IssuerURL != "" {
 		cfg.OIDCAuth.DiscoveryURL = strings.TrimRight(cfg.OIDCAuth.IssuerURL, "/") + "/.well-known/openid-configuration"
+	}
+}
+
+func applyDingTalkAuthEnvOverrides(cfg *Config) {
+	if cfg.DingTalkAuth == nil {
+		cfg.DingTalkAuth = &DingTalkAuthConfig{}
+	}
+	if value := strings.TrimSpace(os.Getenv("DINGTALK_AUTH_ENABLE")); value != "" {
+		cfg.DingTalkAuth.Enable = strings.EqualFold(value, "true")
+	}
+	if value := strings.TrimSpace(os.Getenv("DINGTALK_AUTH_PROVIDER_DISPLAY_NAME")); value != "" {
+		cfg.DingTalkAuth.ProviderDisplayName = value
+	}
+	if value := strings.TrimSpace(os.Getenv("DINGTALK_AUTH_CLIENT_ID")); value != "" {
+		cfg.DingTalkAuth.ClientID = value
+	}
+	if value := strings.TrimSpace(os.Getenv("DINGTALK_AUTH_CLIENT_SECRET")); value != "" {
+		cfg.DingTalkAuth.ClientSecret = value
+	}
+	if value := strings.TrimSpace(os.Getenv("DINGTALK_AUTH_CORP_ID")); value != "" {
+		cfg.DingTalkAuth.CorpID = value
+	}
+	if strings.TrimSpace(cfg.DingTalkAuth.ProviderDisplayName) == "" {
+		cfg.DingTalkAuth.ProviderDisplayName = "钉钉"
 	}
 }
 
