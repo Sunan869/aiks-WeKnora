@@ -1091,7 +1091,6 @@ func (h *OrganizationHandler) ShareKnowledgeBase(c *gin.Context) {
 	})
 }
 
-
 // ShareKnowledgeBaseToUser shares a knowledge base directly to one existing user.
 func (h *OrganizationHandler) ShareKnowledgeBaseToUser(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -1126,7 +1125,6 @@ func (h *OrganizationHandler) ShareKnowledgeBaseToUser(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": share})
 }
-
 
 func (h *OrganizationHandler) SearchKBUserShareCandidates(c *gin.Context) {
 	ctx := c.Request.Context()
