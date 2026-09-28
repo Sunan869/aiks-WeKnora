@@ -25,14 +25,14 @@ while read -r module_name module_version checksum; do
     fi
     if [ -n "${source_dir}" ]; then
         archive="${module_name##*/}-${module_version}.zip"
-        (
-            cd "${source_dir}"
-            if command -v sha256sum >/dev/null 2>&1; then
-                printf '%s  %s\n' "${checksum}" "${archive}" | sha256sum -c -
-            else
-                printf '%s  %s\n' "${checksum}" "${archive}" | shasum -a 256 -c -
-            fi
-        )
+        test -s "${source_dir}/${archive}" || {
+            echo "Missing source archive for ${module_name}@${module_version}" >&2
+            exit 1
+        }
+        # Do not compare the raw ZIP SHA-256 here. Different GOPROXY servers can
+        # return byte-different ZIP archives for the same canonical Go module.
+        # copy-licenses.sh runs 'go mod verify', which checks module content
+        # against go.sum using Go's stable module checksum algorithm.
     fi
 done < licenses/sources/modules.tsv
 

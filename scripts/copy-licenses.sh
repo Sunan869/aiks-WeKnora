@@ -21,6 +21,12 @@ while read -r module_name module_version _checksum; do
     cp "${module_cache}/cache/download/${module_name}/@v/${module_version}.zip" \
         "${source_stage}/${module_name##*/}-${module_version}.zip"
 done < "${license_root}/licenses/sources/modules.tsv"
+
+# Go verifies downloaded module contents against go.sum using its canonical
+# module hash. Raw module ZIP bytes can differ between GOPROXY implementations
+# even when the canonical module content is identical, so do not use the ZIP
+# file's SHA-256 as a cross-proxy integrity check.
+(cd "${license_root}" && go mod verify)
 bash "${license_root}/scripts/check-license-bundle.sh" "${source_stage}"
 
 mkdir -p "${license_dest}/licenses"
