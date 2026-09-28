@@ -1114,6 +1114,8 @@ func (h *OrganizationHandler) ShareKnowledgeBaseToUser(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrCannotShareToSelf):
 			c.Error(apperrors.NewValidationError("Cannot share a knowledge base to yourself"))
+		case errors.Is(err, service.ErrInvalidRole):
+			c.Error(apperrors.NewValidationError("Permission must be viewer or editor"))
 		case errors.Is(err, service.ErrNotKBOwner), errors.Is(err, service.ErrSharePermissionDenied):
 			c.Error(apperrors.NewForbiddenError("Permission denied"))
 		default:
@@ -1230,9 +1232,12 @@ func (h *OrganizationHandler) UpdateUserSharePermission(c *gin.Context) {
 		c.GetUint64(types.TenantIDContextKey.String()),
 	)
 	if err != nil {
-		if errors.Is(err, service.ErrUserShareNotFound) {
+		switch {
+		case errors.Is(err, service.ErrUserShareNotFound):
 			c.Error(apperrors.NewNotFoundError("Direct user share not found"))
-		} else {
+		case errors.Is(err, service.ErrInvalidRole):
+			c.Error(apperrors.NewValidationError("Permission must be viewer or editor"))
+		default:
 			c.Error(apperrors.NewForbiddenError("Permission denied or invalid operation"))
 		}
 		return
