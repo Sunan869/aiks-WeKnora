@@ -131,6 +131,37 @@ func (OrganizationTenantMember) TableName() string {
 	return "organization_tenant_members"
 }
 
+
+// DingTalkManagedOrganizationMembership records only organization memberships
+// that AIKS created from DingTalk department mappings. Manual organization
+// memberships are deliberately not represented here, which lets department
+// reconciliation revoke stale managed access without deleting a human-managed
+// membership that happens to target the same organization.
+type DingTalkManagedOrganizationMembership struct {
+	ID             string        `json:"id" gorm:"type:varchar(36);primaryKey"`
+	UserID         string        `json:"user_id" gorm:"type:varchar(36);not null;index"`
+	TenantID       uint64        `json:"tenant_id" gorm:"not null;index"`
+	OrganizationID string        `json:"organization_id" gorm:"type:varchar(36);not null;index"`
+	CorpID         string        `json:"corp_id" gorm:"type:varchar(128);not null"`
+	DepartmentIDs  string        `json:"department_ids" gorm:"type:text;not null"`
+	Role           OrgMemberRole `json:"role" gorm:"type:varchar(32);not null;default:'viewer'"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+}
+
+func (DingTalkManagedOrganizationMembership) TableName() string {
+	return "dingtalk_managed_org_memberships"
+}
+
+// DingTalkOrganizationMembershipTarget is the desired, aggregated membership
+// for one WeKnora organization after matching the current DingTalk department
+// list against deployment configuration.
+type DingTalkOrganizationMembershipTarget struct {
+	OrganizationID string
+	Role           OrgMemberRole
+	DepartmentIDs  []int64
+}
+
 // JoinRequestStatus represents the status of a join request
 type JoinRequestStatus string
 
