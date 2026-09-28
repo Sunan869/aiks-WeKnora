@@ -30,10 +30,19 @@ jobs:
         shell: bash
         run: |
           files=(
+            internal/config/config.go
             internal/types/knowledge.go
+            internal/types/user.go
+            internal/types/interfaces/user.go
+            internal/application/repository/user.go
+            internal/application/repository/user_external_identity_test.go
             internal/application/service/knowledge.go
             internal/application/service/knowledge_create.go
             internal/application/service/aiks_external_id_test.go
+            internal/application/service/user.go
+            internal/application/service/user_dingtalk_test.go
+            internal/handler/auth.go
+            internal/router/routes_auth_tenant.go
             client/knowledge.go
           )
           unformatted=$(gofmt -l "${files[@]}")
@@ -43,7 +52,8 @@ jobs:
           fi
       - name: Root AIKS service tests
         run: |
-          go test ./internal/application/service -run 'AIKS|ManualContentLimit|SameAIKS' -count=1
+          go test ./internal/application/service -run 'AIKS|ManualContentLimit|SameAIKS|DingTalk' -count=1
+          go test ./internal/application/repository -run 'ExternalIdentity' -count=1
           go test ./internal/types -count=1
       - name: Build server
         run: go build ./cmd/server
