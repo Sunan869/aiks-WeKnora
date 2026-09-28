@@ -86,6 +86,31 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*typ
 	return &user, nil
 }
 
+// GetUserByExternalIdentity resolves a stable third-party subject.
+func (r *userRepository) GetUserByExternalIdentity(ctx context.Context, provider, subject string) (*types.User, error) {
+	var user types.User
+	err := r.db.WithContext(ctx).
+		Table("users").
+		Select("users.*").
+		Joins("JOIN external_identities ei ON ei.user_id = users.id").
+		Where("ei.provider = ? AND ei.subject = ? AND users.deleted_at IS NULL", provider, subject).
+		First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *userRepository) BindExternalIdentity(ctx context.Context, identity *types.ExternalIdentity) error {
+	if identity == nil {
+		return errors.New("external identity is required")
+	}
+	return r.db.WithContext(ctx).Create(identity).Error
+}
+
 // GetUserByUsername gets a user by username
 func (r *userRepository) GetUserByUsername(ctx context.Context, username string) (*types.User, error) {
 	var user types.User
