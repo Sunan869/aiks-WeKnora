@@ -1,7 +1,11 @@
 # Build extension and daemon from the same pinned source on the runtime architecture.
 FROM node:24-bookworm-slim AS browserskill
+ARG APK_MIRROR_ARG
 WORKDIR /build
-RUN apt-get update && \
+RUN if [ -n "$APK_MIRROR_ARG" ]; then \
+        sed -i "s@deb.debian.org@$APK_MIRROR_ARG@g; s@security.debian.org@$APK_MIRROR_ARG@g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
+    fi && \
+    apt-get update && \
     apt-get install -y --no-install-recommends git python3 ca-certificates curl build-essential cmake pkg-config && \
     rm -rf /var/lib/apt/lists/*
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
@@ -110,8 +114,11 @@ COPY --from=browserskill /opt/weknora/browserskill /opt/weknora/browserskill
 # Create a non-root user first
 RUN useradd -m -s /bin/bash appuser
 
-# First, install ca-certificates without mirror to ensure HTTPS works
-RUN apt-get update && \
+# Install ca-certificates using the configured Debian mirror.
+RUN if [ -n "$APK_MIRROR_ARG" ]; then \
+        sed -i "s@deb.debian.org@$APK_MIRROR_ARG@g; s@security.debian.org@$APK_MIRROR_ARG@g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
+    fi && \
+    apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
