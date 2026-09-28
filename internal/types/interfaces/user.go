@@ -118,8 +118,6 @@ type UserRepository interface {
 	GetUsersByIDs(ctx context.Context, ids []string) (map[string]*types.User, error)
 	// GetUserByEmail gets a user by email
 	GetUserByEmail(ctx context.Context, email string) (*types.User, error)
-	GetUserByExternalIdentity(ctx context.Context, provider, subject string) (*types.User, error)
-	BindExternalIdentity(ctx context.Context, identity *types.ExternalIdentity) error
 	// GetUserByUsername gets a user by username
 	GetUserByUsername(ctx context.Context, username string) (*types.User, error)
 	// GetUserByTenantID gets the first user (owner) of a tenant
@@ -140,6 +138,14 @@ type UserRepository interface {
 	RevokeSystemAdmin(ctx context.Context, userID, actorID string) (*types.User, error)
 	// SearchUsers searches users by username or email
 	SearchUsers(ctx context.Context, query string, limit int) ([]*types.User, error)
+}
+
+// ExternalIdentityRepository is intentionally separate from UserRepository so
+// existing user-service collaborators and test doubles do not need third-party
+// login persistence methods unless they actually support external identities.
+type ExternalIdentityRepository interface {
+	GetUserByExternalIdentity(ctx context.Context, provider, subject string) (*types.User, error)
+	BindExternalIdentity(ctx context.Context, identity *types.ExternalIdentity) error
 }
 
 // AuthTokenRepository defines the auth token repository interface
