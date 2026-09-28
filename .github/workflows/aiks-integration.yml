@@ -1,8 +1,7 @@
 name: AIKS integration gate
 
 on:
-  push:
-    branches: [feature/aiks-team-integration]
+  workflow_dispatch:
 
 permissions:
   contents: read
