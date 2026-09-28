@@ -68,6 +68,13 @@ export interface OIDCConfigResponse {
   message?: string
 }
 
+export interface DingTalkConfigResponse {
+  success: boolean
+  enabled: boolean
+  provider_display_name?: string
+  message?: string
+}
+
 // 用户注册接口
 export interface RegisterRequest {
   username: string
@@ -248,6 +255,23 @@ export async function getOIDCConfig(): Promise<OIDCConfigResponse> {
   try {
     const response = await get('/api/v1/auth/oidc/config')
     return response as unknown as OIDCConfigResponse
+  } catch (error: any) {
+    return {
+      success: false,
+      enabled: false,
+      message: error.message || t('error.auth.loginFailed')
+    }
+  }
+}
+
+/**
+ * 获取钉钉登录配置。授权跳转由后端 /auth/dingtalk/start 直接发起，
+ * 浏览器端不接触 Client ID/Secret。
+ */
+export async function getDingTalkConfig(): Promise<DingTalkConfigResponse> {
+  try {
+    const response = await get('/api/v1/auth/dingtalk/config')
+    return response as unknown as DingTalkConfigResponse
   } catch (error: any) {
     return {
       success: false,
