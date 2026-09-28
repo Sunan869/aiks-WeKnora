@@ -3956,6 +3956,7 @@ export default {
     requestInfoEmpty: 'No request info available',
     channelWeb: 'Веб',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelIm: 'IM',
     chunkLabel: 'Фрагмент {index}:',
     navigateToDocument: 'Просмотр документа',
