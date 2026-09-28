@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	ErrKBShareNotFound      = errors.New("knowledge base share not found")
+	ErrKBShareNotFound          = errors.New("knowledge base share not found")
 	ErrKBShareAlreadyExists     = errors.New("knowledge base already shared to this organization")
 	ErrKBUserShareNotFound      = errors.New("knowledge base user share not found")
 	ErrKBUserShareAlreadyExists = errors.New("knowledge base already shared to this user")
@@ -194,7 +194,6 @@ func (r *kbShareRepository) ListSharedKBsForTenant(ctx context.Context, tenantID
 	}
 	return shares, nil
 }
-
 
 // CreateUserShare creates one direct user share.
 func (r *kbShareRepository) CreateUserShare(ctx context.Context, share *types.KnowledgeBaseUserShare) error {
