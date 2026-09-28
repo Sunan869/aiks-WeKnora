@@ -1,10 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -430,6 +433,300 @@ func synthFallbackMembership(user *types.User, activeTenant *types.Tenant) []typ
 		TenantName: name,
 		Role:       types.TenantRoleViewer,
 	}}
+}
+
+const (
+	dingTalkAuthorizationEndpoint = "https://login.dingtalk.com/oauth2/auth"
+	dingTalkTokenEndpoint         = "https://api.dingtalk.com/v1.0/oauth2/userAccessToken"
+	dingTalkUserInfoEndpoint      = "https://api.dingtalk.com/v1.0/contact/users/me"
+)
+
+type dingTalkTokenResponse struct {
+	AccessToken string `json:"accessToken"`
+	CorpID      string `json:"corpId"`
+}
+
+type dingTalkUserInfo struct {
+	Nick      string `json:"nick"`
+	UnionID   string `json:"unionId"`
+	OpenID    string `json:"openId"`
+	Email     string `json:"email"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
+func (s *userService) GetDingTalkAuthorizationURL(
+	ctx context.Context,
+	redirectURI string,
+) (*types.DingTalkAuthURLResponse, error) {
+	cfg := s.config.DingTalkAuth
+	if cfg == nil || !cfg.Enable {
+		return nil, errors.New("DingTalk login is disabled")
+	}
+	if strings.TrimSpace(redirectURI) == "" {
+		return nil, errors.New("redirect_uri is required")
+	}
+
+	nonce, err := generateRandomString(24)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate DingTalk state: %w", err)
+	}
+	state, err := secutils.SignOIDCState(&secutils.OIDCStatePayload{
+		Nonce:       nonce,
+		RedirectURI: strings.TrimSpace(redirectURI),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode DingTalk state: %w", err)
+	}
+
+	query := url.Values{}
+	query.Set("redirect_uri", strings.TrimSpace(redirectURI))
+	query.Set("response_type", "code")
+	query.Set("client_id", strings.TrimSpace(cfg.ClientID))
+	if strings.TrimSpace(cfg.CorpID) != "" {
+		query.Set("scope", "openid corpid")
+	} else {
+		query.Set("scope", "openid")
+	}
+	query.Set("state", state)
+	query.Set("prompt", "consent")
+
+	return &types.DingTalkAuthURLResponse{
+		Success:             true,
+		ProviderDisplayName: cfg.ProviderDisplayName,
+		AuthorizationURL:    dingTalkAuthorizationEndpoint + "?" + query.Encode(),
+		State:               state,
+		Nonce:               nonce,
+	}, nil
+}
+
+func (s *userService) exchangeDingTalkCode(
+	ctx context.Context,
+	authCode string,
+) (*dingTalkTokenResponse, error) {
+	cfg := s.config.DingTalkAuth
+	body, err := json.Marshal(map[string]string{
+		"clientId":     cfg.ClientID,
+		"clientSecret": cfg.ClientSecret,
+		"code":         authCode,
+		"grantType":    "authorization_code",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		dingTalkTokenEndpoint,
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := newOIDCHTTPClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("DingTalk token exchange failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
+		return nil, fmt.Errorf("DingTalk token exchange failed: status=%d", resp.StatusCode)
+	}
+
+	var token dingTalkTokenResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&token); err != nil {
+		return nil, fmt.Errorf("failed to decode DingTalk token response: %w", err)
+	}
+	if strings.TrimSpace(token.AccessToken) == "" {
+		return nil, errors.New("DingTalk token response missing accessToken")
+	}
+	if expected := strings.TrimSpace(cfg.CorpID); expected != "" &&
+		strings.TrimSpace(token.CorpID) != expected {
+		return nil, errors.New("DingTalk organization mismatch")
+	}
+	return &token, nil
+}
+
+func (s *userService) fetchDingTalkUserInfo(
+	ctx context.Context,
+	accessToken string,
+) (*dingTalkUserInfo, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		dingTalkUserInfoEndpoint,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("x-acs-dingtalk-access-token", accessToken)
+
+	resp, err := newOIDCHTTPClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("DingTalk user info request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 2048))
+		return nil, fmt.Errorf("DingTalk user info request failed: status=%d", resp.StatusCode)
+	}
+
+	var info dingTalkUserInfo
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&info); err != nil {
+		return nil, fmt.Errorf("failed to decode DingTalk user info: %w", err)
+	}
+	if strings.TrimSpace(info.UnionID) == "" && strings.TrimSpace(info.OpenID) == "" {
+		return nil, errors.New("DingTalk user info missing unionId/openId")
+	}
+	return &info, nil
+}
+
+func dingTalkSubject(info *dingTalkUserInfo) string {
+	if value := strings.TrimSpace(info.UnionID); value != "" {
+		return value
+	}
+	return strings.TrimSpace(info.OpenID)
+}
+
+func dingTalkFallbackEmail(subject string) string {
+	sum := sha256.Sum256([]byte(subject))
+	return "dingtalk-" + hex.EncodeToString(sum[:16]) + "@external.invalid"
+}
+
+func (s *userService) LoginWithDingTalk(
+	ctx context.Context,
+	authCode string,
+	redirectURI string,
+	provisioning types.TenantProvisioningMode,
+) (*types.OIDCCallbackResponse, error) {
+	if strings.TrimSpace(authCode) == "" {
+		return nil, errors.New("authCode is required")
+	}
+	if strings.TrimSpace(redirectURI) == "" {
+		return nil, errors.New("redirect_uri is required")
+	}
+	if s.config.DingTalkAuth == nil || !s.config.DingTalkAuth.Enable {
+		return nil, errors.New("DingTalk login is disabled")
+	}
+
+	token, err := s.exchangeDingTalkCode(ctx, authCode)
+	if err != nil {
+		return nil, err
+	}
+	info, err := s.fetchDingTalkUserInfo(ctx, token.AccessToken)
+	if err != nil {
+		return nil, err
+	}
+	subject := dingTalkSubject(info)
+
+	user, err := s.userRepo.GetUserByExternalIdentity(
+		ctx,
+		types.ExternalIdentityProviderDingTalk,
+		subject,
+	)
+	if err != nil && !isUserLookupNotFound(err) {
+		return nil, fmt.Errorf("failed to resolve DingTalk identity: %w", err)
+	}
+
+	isNewUser := false
+	if user == nil {
+		email := strings.TrimSpace(info.Email)
+		if email != "" {
+			candidate, lookupErr := s.userRepo.GetUserByEmail(ctx, email)
+			if lookupErr == nil {
+				user = candidate
+			} else if !isUserLookupNotFound(lookupErr) {
+				return nil, fmt.Errorf("failed to query DingTalk user by email: %w", lookupErr)
+			}
+		}
+		if user == nil {
+			if email == "" {
+				email = dingTalkFallbackEmail(subject)
+			}
+			user, err = s.provisionOIDCUser(ctx, &types.OIDCUserInfo{
+				Subject:  subject,
+				Username: strings.TrimSpace(info.Nick),
+				Email:    email,
+			}, provisioning)
+			if err != nil {
+				return nil, fmt.Errorf("failed to auto-provision DingTalk user: %w", err)
+			}
+			isNewUser = true
+		}
+
+		bindErr := s.userRepo.BindExternalIdentity(ctx, &types.ExternalIdentity{
+			Provider: types.ExternalIdentityProviderDingTalk,
+			Subject:  subject,
+			UserID:   user.ID,
+		})
+		if bindErr != nil {
+			// Concurrent first-login: resolve the binding winner rather than
+			// overwriting an immutable upstream identity.
+			linked, lookupErr := s.userRepo.GetUserByExternalIdentity(
+				ctx,
+				types.ExternalIdentityProviderDingTalk,
+				subject,
+			)
+			if lookupErr != nil || linked == nil {
+				return nil, fmt.Errorf("failed to bind DingTalk identity: %w", bindErr)
+			}
+			user = linked
+			isNewUser = false
+		}
+	}
+
+	if !user.IsActive {
+		return &types.OIDCCallbackResponse{
+			Success: false,
+			Message: "Account is disabled",
+		}, nil
+	}
+
+	if strings.TrimSpace(info.AvatarURL) != "" && user.Avatar == "" {
+		user.Avatar = strings.TrimSpace(info.AvatarURL)
+		user.UpdatedAt = time.Now()
+		if err := s.userRepo.UpdateUser(ctx, user); err != nil {
+			logger.Warnf(ctx, "DingTalk login: failed to persist avatar for user %s: %v", user.ID, err)
+		}
+	}
+
+	resolvedTenantID := s.resolveLoginTenantID(ctx, user)
+	accessToken, refreshToken, err := s.generateTokensForTenant(ctx, user, resolvedTenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate local tokens: %w", err)
+	}
+
+	var tenant *types.Tenant
+	if resolvedTenantID > 0 {
+		if loaded, loadErr := s.tenantService.GetTenantByID(ctx, resolvedTenantID); loadErr == nil {
+			tenant = loaded
+		} else {
+			logger.Warnf(
+				ctx,
+				"DingTalk login: failed to load tenant %d for user %s: %v",
+				resolvedTenantID,
+				user.ID,
+				loadErr,
+			)
+		}
+	}
+	memberships := s.buildMembershipsForUser(ctx, user, tenant)
+
+	return &types.OIDCCallbackResponse{
+		Success:      true,
+		Message:      "登录成功",
+		User:         user,
+		Tenant:       tenant,
+		Memberships:  memberships,
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+		IsNewUser:    isNewUser,
+	}, nil
 }
 
 // GetOIDCAuthorizationURL builds the OIDC authorization URL.
