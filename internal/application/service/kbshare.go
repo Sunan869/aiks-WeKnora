@@ -697,19 +697,22 @@ func (s *kbShareService) CheckTenantKBPermission(ctx context.Context, kbID strin
 	if s.userShareRepo != nil {
 		caller := types.CallerFromContext(ctx)
 		if caller.UserID != "" {
-			directShares, directErr := s.userShareRepo.ListUserSharesByKnowledgeBase(ctx, kbID)
-			if directErr != nil {
-				return "", false, directErr
-			}
-			for _, share := range directShares {
-				if share == nil || share.TargetUserID != caller.UserID {
-					continue
-				}
+			// Direct grants are identity-scoped. Use the exact indexed lookup
+			// instead of listing every recipient of this KB: authorization is a
+			// hot path and must not load unrelated users or share rows.
+			directShare, directErr := s.userShareRepo.GetUserShareByKBAndUser(ctx, kbID, caller.UserID)
+			switch {
+			case directErr == nil && directShare != nil:
 				isShared = true
-				effective := applyTenantRoleCap(share.Permission, callerTenantRole)
+				effective := applyTenantRoleCap(directShare.Permission, callerTenantRole)
 				if highest == "" || effective.HasPermission(highest) {
 					highest = effective
 				}
+			case errors.Is(directErr, repository.ErrKBUserShareNotFound):
+				// No direct grant for this identity; organization grants above may
+				// still authorize the request.
+			case directErr != nil:
+				return "", false, directErr
 			}
 		}
 	}
