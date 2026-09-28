@@ -3956,6 +3956,7 @@ export default {
     requestInfoEmpty: 'No request info available',
     channelWeb: '웹',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelIm: 'IM',
     chunkLabel: '청크 {index}:',
     navigateToDocument: '문서 상세 보기',
