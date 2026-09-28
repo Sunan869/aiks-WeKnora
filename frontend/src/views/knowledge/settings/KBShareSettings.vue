@@ -494,11 +494,11 @@ onBeforeUnmount(() => {
   margin: 12px 0 16px;
   padding: 4px;
   background: var(--td-bg-color-secondarycontainer);
-  border-radius: 8px;
+  border-radius: var(--app-radius-md);
 
   button {
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--app-radius-sm);
     padding: 8px 12px;
     background: transparent;
     color: var(--td-text-color-secondary);
@@ -519,7 +519,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: 10px 4px;
   color: var(--td-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--app-text-sm);
 }
 
 .user-share-candidates {
@@ -527,7 +527,7 @@ onBeforeUnmount(() => {
   overflow: auto;
   margin-top: 6px;
   border: 1px solid var(--td-component-border);
-  border-radius: 6px;
+  border-radius: var(--app-radius-sm);
 }
 
 .user-share-candidate {
