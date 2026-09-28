@@ -149,6 +149,7 @@ const getKnowledgeType = (item: KnowledgeCard) => {
 const channelLabelMap: Record<string, string> = {
   web: 'knowledgeBase.channelWeb',
   api: 'knowledgeBase.channelApi',
+  aiks: 'knowledgeBase.channelAiks',
   browser_extension: 'knowledgeBase.channelBrowserExtension',
   wechat: 'knowledgeBase.channelWechat',
   wecom: 'knowledgeBase.channelWecom',
