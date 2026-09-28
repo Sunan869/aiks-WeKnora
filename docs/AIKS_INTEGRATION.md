@@ -82,3 +82,31 @@ destination knowledge base. A repeated POST with the same identifier:
 
 This closes the normal sequential retry window where WeKnora committed a POST
 but the caller lost the HTTP response before persisting the returned knowledge ID.
+
+
+## Team identity and sharing extensions
+
+The AIKS fork keeps upstream workspace/organization sharing and adds two
+enterprise-oriented extensions:
+
+- DingTalk login: `/api/v1/auth/dingtalk/start` uses DingTalk OAuth, binds a
+  stable external identity (unionId preferred, openId fallback), and then issues
+  normal WeKnora access/refresh tokens.
+- Direct user KB shares: owners can grant an existing active account
+  `viewer` or `editor` permission without creating a one-user organization.
+
+Direct user sharing endpoints:
+
+```text
+POST   /api/v1/knowledge-bases/{kb_id}/user-shares
+GET    /api/v1/knowledge-bases/{kb_id}/user-shares
+GET    /api/v1/knowledge-bases/{kb_id}/user-shares/candidates?q=...
+PUT    /api/v1/knowledge-bases/{kb_id}/user-shares/{share_id}
+DELETE /api/v1/knowledge-bases/{kb_id}/user-shares/{share_id}
+```
+
+A direct grant follows the authenticated user identity across that user's active
+workspaces. The effective permission is still capped by the caller's current
+tenant role, so a tenant Viewer remains read-only even when the direct grant is
+`editor`. Organization shares continue to use the existing three-dimensional
+cap and are not changed by this extension.
