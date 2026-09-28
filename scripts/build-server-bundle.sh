@@ -38,6 +38,7 @@ docker build \
   --build-arg APK_MIRROR_ARG="${APK_MIRROR_ARG:-mirrors.aliyun.com}" \
   --build-arg GOPROXY_ARG="${GOPROXY_ARG:-https://goproxy.cn,direct}" \
   --build-arg WITH_ANYDOC="${WITH_ANYDOC:-1}" \
+  --build-arg WITH_LICENSE_BUNDLE="${WITH_LICENSE_BUNDLE:-0}" \
   -t "$APP_IMAGE" \
   -f "${ROOT_DIR}/docker/Dockerfile.app" \
   "$ROOT_DIR"

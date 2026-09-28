@@ -48,7 +48,14 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY cmd/download cmd/download
 RUN go run cmd/download/duckdb/duckdb.go
 COPY . .
-RUN --mount=type=cache,target=/go/pkg/mod bash ./scripts/copy-licenses.sh /license-bundle
+ARG WITH_LICENSE_BUNDLE=1
+RUN --mount=type=cache,target=/go/pkg/mod \
+    if [ "$WITH_LICENSE_BUNDLE" = "1" ]; then \
+        bash ./scripts/copy-licenses.sh /license-bundle; \
+    else \
+        mkdir -p /license-bundle/licenses/sources && \
+        cp LICENSE THIRD_PARTY_NOTICES.md /license-bundle/; \
+    fi
 
 # Get version and commit info for build injection
 ARG VERSION_ARG
