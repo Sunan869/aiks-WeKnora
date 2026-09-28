@@ -81,6 +81,25 @@ export interface KnowledgeBaseShare {
   created_at: string
 }
 
+export interface KnowledgeBaseUserShare {
+  id: string
+  knowledge_base_id: string
+  target_user_id: string
+  target_username?: string
+  target_email?: string
+  shared_by_user_id: string
+  source_tenant_id: number
+  permission: 'editor' | 'viewer'
+  created_at: string
+}
+
+export interface UserShareCandidate {
+  id: string
+  username: string
+  email: string
+  avatar?: string
+}
+
 export interface SharedKnowledgeBase {
   knowledge_base: {
     id: string
@@ -172,6 +191,11 @@ export interface JoinOrganizationRequest {
 export interface ShareKnowledgeBaseRequest {
   organization_id: string
   permission: 'admin' | 'editor' | 'viewer'
+}
+
+export interface ShareKnowledgeBaseToUserRequest {
+  user_id: string
+  permission: 'editor' | 'viewer'
 }
 
 export interface UpdateSharePermissionRequest {
@@ -616,6 +640,69 @@ export async function removeShare(kbId: string, shareId: string): Promise<ApiRes
     return response as unknown as ApiResponse<void>
   } catch (error: any) {
     return { success: false, message: error.message || 'Failed to remove share' }
+  }
+}
+
+
+export async function shareKnowledgeBaseToUser(
+  kbId: string,
+  req: ShareKnowledgeBaseToUserRequest
+): Promise<ApiResponse<KnowledgeBaseUserShare>> {
+  try {
+    const response = await post(`/api/v1/knowledge-bases/${kbId}/user-shares`, req)
+    return response as unknown as ApiResponse<KnowledgeBaseUserShare>
+  } catch (error: any) {
+    return { success: false, message: error.message || 'Failed to share knowledge base to user' }
+  }
+}
+
+export async function listKBUserShares(
+  kbId: string
+): Promise<ApiResponse<{ shares: KnowledgeBaseUserShare[]; total: number }>> {
+  try {
+    const response = await get(`/api/v1/knowledge-bases/${kbId}/user-shares`)
+    return response as unknown as ApiResponse<{ shares: KnowledgeBaseUserShare[]; total: number }>
+  } catch (error: any) {
+    return { success: false, message: error.message || 'Failed to list direct user shares' }
+  }
+}
+
+export async function searchKBUserShareCandidates(
+  kbId: string,
+  query: string
+): Promise<ApiResponse<UserShareCandidate[]>> {
+  try {
+    const response = await get(
+      `/api/v1/knowledge-bases/${kbId}/user-shares/candidates?q=${encodeURIComponent(query)}`
+    )
+    return response as unknown as ApiResponse<UserShareCandidate[]>
+  } catch (error: any) {
+    return { success: false, message: error.message || 'Failed to search users' }
+  }
+}
+
+export async function updateUserSharePermission(
+  kbId: string,
+  shareId: string,
+  req: { permission: 'editor' | 'viewer' }
+): Promise<ApiResponse<void>> {
+  try {
+    const response = await put(`/api/v1/knowledge-bases/${kbId}/user-shares/${shareId}`, req)
+    return response as unknown as ApiResponse<void>
+  } catch (error: any) {
+    return { success: false, message: error.message || 'Failed to update direct user share' }
+  }
+}
+
+export async function removeUserShare(
+  kbId: string,
+  shareId: string
+): Promise<ApiResponse<void>> {
+  try {
+    const response = await del(`/api/v1/knowledge-bases/${kbId}/user-shares/${shareId}`)
+    return response as unknown as ApiResponse<void>
+  } catch (error: any) {
+    return { success: false, message: error.message || 'Failed to remove direct user share' }
   }
 }
 

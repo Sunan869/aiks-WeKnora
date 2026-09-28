@@ -20,22 +20,19 @@
           </t-popup>
         </div>
       </div>
-      <p class="share-panel-desc">{{ $t('knowledgeEditor.share.description') }}</p>
+      <p class="share-panel-desc">{{ $t('organization.share.descriptionUnified') }}</p>
     </div>
 
     <div class="share-panel-list-wrap">
       <div class="share-panel-list-header">
         <div class="share-panel-titlewrap">
           <span class="share-panel-list-title">{{ $t('organization.share.sharedTo') }}</span>
-          <span class="share-panel-count-badge">{{ filteredShares.length }}</span>
+          <span class="share-panel-count-badge">{{ filteredRows.length }}</span>
         </div>
         <div class="share-panel-actions">
           <div class="share-panel-search">
-            <t-input v-model="searchQuery" size="small" :placeholder="$t('organization.share.searchPlaceholder')"
-              clearable>
-              <template #prefix-icon>
-                <t-icon name="search" />
-              </template>
+            <t-input v-model="searchQuery" size="small" :placeholder="$t('organization.share.searchUnifiedPlaceholder')" clearable>
+              <template #prefix-icon><t-icon name="search" /></template>
             </t-input>
           </div>
           <t-popup v-if="canShare" v-model="addPopupVisible" trigger="click" placement="bottom-end" destroy-on-close
@@ -45,14 +42,49 @@
               <template #icon><t-icon name="add" /></template>
             </t-button>
             <template #content>
-              <div class="share-add-popup-inner" @click.stop>
-                <div class="member-invite-popup-title">{{ $t('organization.share.addShareDialogTitle') }}</div>
+              <div class="share-add-popup-inner share-add-popup-wide" @click.stop>
+                <div class="member-invite-popup-title">{{ $t('organization.share.addShareDialogTitleUnified') }}</div>
+
+                <div class="share-target-switch">
+                  <button type="button" :class="{ active: shareTargetType === 'space' }" @click="shareTargetType = 'space'">
+                    {{ $t('organization.share.targetSpace') }}
+                  </button>
+                  <button type="button" :class="{ active: shareTargetType === 'user' }" @click="shareTargetType = 'user'">
+                    {{ $t('organization.share.targetUser') }}
+                  </button>
+                </div>
+
                 <div class="org-upgrade-fields">
-                  <div class="org-upgrade-field">
+                  <div v-if="shareTargetType === 'space'" class="org-upgrade-field">
                     <label class="org-upgrade-field-label">{{ $t('organization.share.selectOrg') }}</label>
                     <ShareToSpaceOrgSelect v-model="selectedOrgId" :organizations="availableOrganizations"
                       :loading="loadingOrgs" />
                   </div>
+
+                  <div v-else class="org-upgrade-field">
+                    <label class="org-upgrade-field-label">{{ $t('organization.share.selectUser') }}</label>
+                    <t-input v-model="userQuery" :placeholder="$t('organization.share.searchUserPlaceholder')" clearable />
+                    <div v-if="searchingUsers" class="user-share-search-status">
+                      <t-loading size="small" /> {{ $t('organization.share.searchingUsers') }}
+                    </div>
+                    <div v-else-if="userQuery.trim().length >= 2 && userCandidates.length === 0"
+                      class="user-share-search-status">
+                      {{ $t('organization.share.noUserCandidates') }}
+                    </div>
+                    <div v-if="userCandidates.length > 0" class="user-share-candidates">
+                      <button v-for="candidate in userCandidates" :key="candidate.id" type="button"
+                        class="user-share-candidate" :class="{ selected: selectedUserId === candidate.id }"
+                        @click="selectedUserId = candidate.id">
+                        <span class="user-share-candidate-main">
+                          <strong>{{ candidate.username || candidate.email }}</strong>
+                          <small>{{ candidate.email }}</small>
+                        </span>
+                        <t-icon v-if="selectedUserId === candidate.id" name="check" />
+                      </button>
+                    </div>
+                    <p class="member-form-hint">{{ $t('organization.share.userShareHint') }}</p>
+                  </div>
+
                   <div class="org-upgrade-field org-upgrade-field--last">
                     <label class="org-upgrade-field-label">{{ $t('organization.share.permission') }}</label>
                     <t-select v-model="selectedPermission" size="medium">
@@ -62,11 +94,12 @@
                     <p class="member-form-hint">{{ $t('organization.share.permissionTip') }}</p>
                   </div>
                 </div>
+
                 <div class="invite-popup-footer">
-                  <t-button variant="outline" :disabled="submitting" @click="addPopupVisible = false">
+                  <t-button variant="outline" :disabled="submitting" @click="closeAddPopup">
                     {{ $t('common.cancel') }}
                   </t-button>
-                  <t-button theme="primary" :loading="submitting" :disabled="!selectedOrgId" @click="handleShare">
+                  <t-button theme="primary" :loading="submitting" :disabled="!canSubmitShare" @click="handleShare">
                     {{ $t('knowledgeEditor.share.addShare') }}
                   </t-button>
                 </div>
@@ -76,27 +109,31 @@
         </div>
       </div>
 
-      <div v-if="loadingShares && shares.length === 0" class="share-panel-loading">
+      <div v-if="loadingShares && rows.length === 0" class="share-panel-loading">
         <t-loading size="small" />
         <span>{{ $t('organization.share.loading') }}</span>
       </div>
-      <div v-else-if="filteredShares.length === 0" class="share-panel-empty">
+      <div v-else-if="filteredRows.length === 0" class="share-panel-empty">
         <t-empty :description="searchQuery.trim()
-          ? $t('organization.share.emptySearch', { q: searchQuery })
-          : $t('organization.share.noShares')" />
+          ? $t('organization.share.emptyUnifiedSearch', { q: searchQuery })
+          : $t('organization.share.noUnifiedShares')" />
       </div>
       <div v-else class="share-panel-table-shell">
-        <t-table row-key="id" :data="filteredShares" :columns="shareColumns" size="medium" hover stripe
+        <t-table row-key="rowKey" :data="filteredRows" :columns="shareColumns" size="medium" hover stripe
           :loading="loadingShares">
-          <template #space="{ row }">
+          <template #target="{ row }">
             <div class="share-space-cell">
               <span class="share-space-name">
-                <SpaceAvatar :name="row.organization_name || ''"
-                  :avatar="getOrgForShare(row.organization_id)?.avatar" size="small" />
-                <span class="share-space-name-text">{{ row.organization_name }}</span>
+                <SpaceAvatar v-if="row.kind === 'space'" :name="row.name || ''"
+                  :avatar="getOrgForShare(row.organizationId)?.avatar" size="small" />
+                <span v-else class="user-share-avatar">{{ userInitial(row.name) }}</span>
+                <span class="share-space-name-text">{{ row.name }}</span>
               </span>
-              <span v-if="row.shared_by_username" class="share-space-meta">
-                {{ $t('organization.share.sharedFrom') }} {{ row.shared_by_username }}
+              <span class="share-space-meta">
+                {{ row.kind === 'space'
+                  ? $t('organization.share.targetSpace')
+                  : $t('organization.share.targetUser') }}
+                <template v-if="row.subtitle"> · {{ row.subtitle }}</template>
               </span>
             </div>
           </template>
@@ -107,17 +144,15 @@
                 <t-option value="viewer" :label="$t('organization.share.permissionReadonly')" />
                 <t-option value="editor" :label="$t('organization.share.permissionEditable')" />
               </t-select>
-              <t-tag v-else size="small"
-                :theme="row.permission === 'editor' || row.permission === 'admin' ? 'warning' : 'default'"
-                variant="light">
+              <t-tag v-else size="small" :theme="row.permission === 'editor' ? 'warning' : 'default'" variant="light">
                 {{ permissionLabel(row.permission) }}
               </t-tag>
             </div>
           </template>
-          <template #created_at="{ row }">{{ formatShareDate(row.created_at) }}</template>
+          <template #created_at="{ row }">{{ formatShareDate(row.createdAt) }}</template>
           <template #actions="{ row }">
             <div v-if="canShare" class="share-table-actions">
-              <t-popconfirm :content="$t('knowledgeEditor.share.unshareConfirm', { name: row.organization_name })"
+              <t-popconfirm :content="$t('organization.share.unshareTargetConfirm', { name: row.name })"
                 :confirm-btn="{ content: $t('common.confirm'), theme: 'danger' }"
                 :cancel-btn="{ content: $t('common.cancel') }" placement="left" @confirm="handleUnshare(row)">
                 <t-tooltip :content="$t('organization.share.unshareAction')" placement="top">
@@ -131,35 +166,50 @@
         </t-table>
       </div>
     </div>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 import { useI18n } from 'vue-i18n'
 import { useOrganizationStore } from '@/stores/organization'
-import { listKBShares } from '@/api/organization'
-import type { KnowledgeBaseShare } from '@/api/organization'
+import {
+  listKBShares,
+  listKBUserShares,
+  shareKnowledgeBaseToUser,
+  searchKBUserShareCandidates,
+  updateUserSharePermission,
+  removeUserShare,
+} from '@/api/organization'
+import type {
+  KnowledgeBaseShare,
+  KnowledgeBaseUserShare,
+  UserShareCandidate,
+} from '@/api/organization'
 import SpaceAvatar from '@/components/SpaceAvatar.vue'
 import ShareToSpaceOrgSelect from '@/components/ShareToSpaceOrgSelect.vue'
 
 const { t } = useI18n()
 const orgStore = useOrganizationStore()
 
-function getOrgForShare(organizationId: string) {
-  return orgStore.organizations.find(o => o.id === organizationId)
-}
-
 interface Props {
   kbId: string
   canShare?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  canShare: false,
-})
+type ShareRow = {
+  rowKey: string
+  kind: 'space' | 'user'
+  id: string
+  name: string
+  subtitle?: string
+  permission: 'viewer' | 'editor'
+  createdAt: string
+  organizationId?: string
+}
+
+const props = withDefaults(defineProps<Props>(), { canShare: false })
 
 const shareHintPopupInnerStyle = {
   boxSizing: 'border-box' as const,
@@ -177,7 +227,20 @@ const addPopupVisible = ref(false)
 const searchQuery = ref('')
 const selectedOrgId = ref('')
 const selectedPermission = ref<'viewer' | 'editor'>('viewer')
+const shareTargetType = ref<'space' | 'user'>('space')
+const userQuery = ref('')
+const selectedUserId = ref('')
+const userCandidates = ref<UserShareCandidate[]>([])
+const searchingUsers = ref(false)
 const shares = ref<(KnowledgeBaseShare & { organization_name?: string })[]>([])
+const userShares = ref<KnowledgeBaseUserShare[]>([])
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let searchGeneration = 0
+
+function getOrgForShare(organizationId?: string) {
+  if (!organizationId) return undefined
+  return orgStore.organizations.find(o => o.id === organizationId)
+}
 
 const availableOrganizations = computed(() => {
   const sharedOrgIds = new Set(shares.value.map(s => s.organization_id))
@@ -188,22 +251,45 @@ const availableOrganizations = computed(() => {
   )
 })
 
-const filteredShares = computed(() => {
+const rows = computed<ShareRow[]>(() => [
+  ...shares.value.map((share) => ({
+    rowKey: `space:${share.id}`,
+    kind: 'space' as const,
+    id: share.id,
+    name: share.organization_name || share.organization_id,
+    subtitle: share.shared_by_username
+      ? `${t('organization.share.sharedFrom')} ${share.shared_by_username}`
+      : undefined,
+    permission: (share.permission === 'editor' || share.permission === 'admin' ? 'editor' : 'viewer') as 'viewer' | 'editor',
+    createdAt: share.created_at,
+    organizationId: share.organization_id,
+  })),
+  ...userShares.value.map((share) => ({
+    rowKey: `user:${share.id}`,
+    kind: 'user' as const,
+    id: share.id,
+    name: share.target_username || share.target_email || share.target_user_id,
+    subtitle: share.target_email && share.target_email !== share.target_username ? share.target_email : undefined,
+    permission: share.permission,
+    createdAt: share.created_at,
+  })),
+])
+
+const filteredRows = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return shares.value
-  return shares.value.filter((share) => {
-    const haystack = [
-      share.organization_name,
-      share.shared_by_username,
-      permissionLabel(share.permission),
-    ].filter(Boolean).join(' ').toLowerCase()
-    return haystack.includes(query)
-  })
+  if (!query) return rows.value
+  return rows.value.filter((row) =>
+    [row.name, row.subtitle, permissionLabel(row.permission)]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(query)
+  )
 })
 
 const shareColumns = computed(() => {
   const cols = [
-    { colKey: 'space', title: t('organization.share.columns.space'), ellipsis: true, minWidth: 180 },
+    { colKey: 'target', title: t('organization.share.columns.target'), ellipsis: true, minWidth: 190 },
     { colKey: 'permission', title: t('organization.share.columns.permission'), width: 132 },
     { colKey: 'created_at', title: t('organization.share.columns.sharedAt'), width: 154 },
   ]
@@ -213,11 +299,14 @@ const shareColumns = computed(() => {
   return cols
 })
 
+const canSubmitShare = computed(() =>
+  shareTargetType.value === 'space' ? !!selectedOrgId.value : !!selectedUserId.value
+)
+
 function permissionLabel(permission: string) {
-  if (permission === 'editor' || permission === 'admin') {
-    return t('organization.share.permissionEditable')
-  }
-  return t('organization.share.permissionReadonly')
+  return permission === 'editor'
+    ? t('organization.share.permissionEditable')
+    : t('organization.share.permissionReadonly')
 }
 
 function formatShareDate(dateStr?: string) {
@@ -225,6 +314,11 @@ function formatShareDate(dateStr?: string) {
   const date = new Date(dateStr)
   if (Number.isNaN(date.getTime())) return dateStr
   return date.toLocaleDateString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
+function userInitial(name?: string) {
+  const value = (name || '?').trim()
+  return value.slice(0, 1).toUpperCase()
 }
 
 async function loadOrganizations() {
@@ -240,14 +334,23 @@ async function loadShares() {
   if (!props.kbId) return
   loadingShares.value = true
   try {
-    const result = await listKBShares(props.kbId)
-    if (result.success && result.data) {
-      const sharesData = (result.data as { shares?: KnowledgeBaseShare[] }).shares || result.data
+    const [orgResult, userResult] = await Promise.all([
+      listKBShares(props.kbId),
+      listKBUserShares(props.kbId),
+    ])
+    if (orgResult.success && orgResult.data) {
+      const sharesData = (orgResult.data as { shares?: KnowledgeBaseShare[] }).shares || orgResult.data
       const sharesList = Array.isArray(sharesData) ? sharesData : []
       shares.value = sharesList.map((share: KnowledgeBaseShare) => ({
         ...share,
-        organization_name: share.organization_name || orgStore.organizations.find(o => o.id === share.organization_id)?.name || share.organization_id
+        organization_name:
+          share.organization_name ||
+          orgStore.organizations.find(o => o.id === share.organization_id)?.name ||
+          share.organization_id,
       }))
+    }
+    if (userResult.success && userResult.data) {
+      userShares.value = userResult.data.shares || []
     }
   } catch (e) {
     console.error('Failed to load shares:', e)
@@ -256,39 +359,61 @@ async function loadShares() {
   }
 }
 
-async function handleShare() {
-  if (!selectedOrgId.value) return
+function resetUserSearch() {
+  userQuery.value = ''
+  selectedUserId.value = ''
+  userCandidates.value = []
+  searchingUsers.value = false
+  searchGeneration += 1
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
+}
 
+function closeAddPopup() {
+  addPopupVisible.value = false
+  selectedOrgId.value = ''
+  selectedPermission.value = 'viewer'
+  shareTargetType.value = 'space'
+  resetUserSearch()
+}
+
+async function handleShare() {
+  if (!canSubmitShare.value) return
   submitting.value = true
   try {
-    const result = await orgStore.shareKnowledgeBase(props.kbId, {
-      organization_id: selectedOrgId.value,
-      permission: selectedPermission.value
-    })
+    const result = shareTargetType.value === 'space'
+      ? await orgStore.shareKnowledgeBase(props.kbId, {
+          organization_id: selectedOrgId.value,
+          permission: selectedPermission.value,
+        })
+      : await shareKnowledgeBaseToUser(props.kbId, {
+          user_id: selectedUserId.value,
+          permission: selectedPermission.value,
+        })
+
     if (result.success) {
       MessagePlugin.success(t('organization.share.shareSuccess'))
-      selectedOrgId.value = ''
-      selectedPermission.value = 'viewer'
-      addPopupVisible.value = false
+      closeAddPopup()
       await loadShares()
     } else {
       MessagePlugin.error(result.message || t('organization.share.shareFailed'))
     }
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : t('organization.share.shareFailed')
-    MessagePlugin.error(message)
+    MessagePlugin.error(e instanceof Error ? e.message : t('organization.share.shareFailed'))
   } finally {
     submitting.value = false
   }
 }
 
-async function handleUpdatePermission(share: KnowledgeBaseShare, newPermission: string) {
-  if (share.permission === newPermission) return
-
+async function handleUpdatePermission(row: ShareRow, newPermission: string) {
+  const permission = newPermission as 'viewer' | 'editor'
+  if (row.permission === permission) return
   try {
-    const result = await orgStore.changeKnowledgeBaseSharePermission(props.kbId, share.id, {
-      permission: newPermission as 'viewer' | 'editor'
-    })
+    const result = row.kind === 'space'
+      ? await orgStore.changeKnowledgeBaseSharePermission(props.kbId, row.id, { permission })
+      : await updateUserSharePermission(props.kbId, row.id, { permission })
     if (result.success) {
       MessagePlugin.success(t('organization.roleUpdated'))
       await loadShares()
@@ -296,18 +421,15 @@ async function handleUpdatePermission(share: KnowledgeBaseShare, newPermission: 
       MessagePlugin.error(result.message || t('organization.roleUpdateFailed'))
     }
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : t('organization.roleUpdateFailed')
-    MessagePlugin.error(message)
+    MessagePlugin.error(e instanceof Error ? e.message : t('organization.roleUpdateFailed'))
   }
 }
 
-async function handleUnshare(share: KnowledgeBaseShare) {
+async function handleUnshare(row: ShareRow) {
   try {
-    const result = await orgStore.unshareKnowledgeBase(
-      props.kbId,
-      share.id,
-      share.organization_id
-    )
+    const result = row.kind === 'space'
+      ? await orgStore.unshareKnowledgeBase(props.kbId, row.id, row.organizationId || '')
+      : await removeUserShare(props.kbId, row.id)
     if (result.success) {
       MessagePlugin.success(t('organization.share.unshareSuccess'))
       await loadShares()
@@ -315,20 +437,151 @@ async function handleUnshare(share: KnowledgeBaseShare) {
       MessagePlugin.error(result.message || t('organization.share.unshareFailed'))
     }
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : t('organization.share.unshareFailed')
-    MessagePlugin.error(message)
+    MessagePlugin.error(e instanceof Error ? e.message : t('organization.share.unshareFailed'))
   }
 }
 
+watch(userQuery, (value) => {
+  selectedUserId.value = ''
+  userCandidates.value = []
+  if (searchTimer) clearTimeout(searchTimer)
+  const query = value.trim()
+  if (query.length < 2 || shareTargetType.value !== 'user' || !props.kbId) {
+    searchingUsers.value = false
+    return
+  }
+  const generation = ++searchGeneration
+  searchingUsers.value = true
+  searchTimer = setTimeout(async () => {
+    try {
+      const result = await searchKBUserShareCandidates(props.kbId, query)
+      if (generation !== searchGeneration) return
+      userCandidates.value = result.success && Array.isArray(result.data) ? result.data : []
+    } finally {
+      if (generation === searchGeneration) searchingUsers.value = false
+    }
+  }, 250)
+})
+
+watch(shareTargetType, (type) => {
+  if (type === 'space') resetUserSearch()
+  selectedOrgId.value = ''
+})
+
 watch(() => props.kbId, async (newKbId) => {
   if (newKbId) {
-    await Promise.all([loadOrganizations(), loadShares()])
+    await loadOrganizations()
+    await loadShares()
   }
 }, { immediate: true })
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+})
 </script>
 
 <style scoped lang="less">
 @import '@/components/share-to-space-panel.less';
+
+.share-add-popup-wide {
+  min-width: 360px;
+}
+
+.share-target-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 12px 0 16px;
+  padding: 4px;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: 8px;
+
+  button {
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    color: var(--td-text-color-secondary);
+    cursor: pointer;
+
+    &.active {
+      background: var(--td-bg-color-container);
+      color: var(--td-brand-color);
+      font-weight: 600;
+      box-shadow: var(--td-shadow-1);
+    }
+  }
+}
+
+.user-share-search-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  color: var(--td-text-color-secondary);
+  font-size: 12px;
+}
+
+.user-share-candidates {
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 6px;
+  border: 1px solid var(--td-component-border);
+  border-radius: 6px;
+}
+
+.user-share-candidate {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--td-component-stroke);
+  background: transparent;
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  cursor: pointer;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &:hover,
+  &.selected {
+    background: var(--td-brand-color-light);
+  }
+}
+
+.user-share-candidate-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    color: var(--td-text-color-secondary);
+  }
+}
+
+.user-share-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--td-brand-color-light);
+  color: var(--td-brand-color);
+  font-weight: 600;
+  flex: 0 0 auto;
+}
 </style>
 
 <style lang="less">
