@@ -23,6 +23,7 @@ const (
 const (
 	ChannelWeb              = "web"               // Web UI (default)
 	ChannelAPI              = "api"               // External API call
+	ChannelAIKS             = "aiks"              // AIKS session collector
 	ChannelBrowserExtension = "browser_extension" // Browser extension / plugin
 	ChannelWechat           = "wechat"            // WeChat
 	ChannelWecom            = "wecom"             // WeCom (企业微信)
