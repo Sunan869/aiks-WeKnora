@@ -797,6 +797,7 @@ export default {
     channelLabel: 'Source Channel',
     channelWeb: 'Web',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelBrowserExtension: 'Browser Extension',
     channelWechat: 'WeChat',
     channelWecom: 'WeCom',
