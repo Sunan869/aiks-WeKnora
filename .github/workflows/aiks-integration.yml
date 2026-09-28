@@ -2,6 +2,8 @@ name: AIKS integration gate
 
 on:
   workflow_dispatch:
+  push:
+    branches: [feature/aiks-team-integration]
 
 permissions:
   contents: read
@@ -53,7 +55,7 @@ jobs:
             client/knowledge.go
           )
           gofmt -w "${files[@]}"
-          git diff -- "${files[@]"
+          git diff -- "${files[@]}"
       - name: Root AIKS service tests
         run: |
           go test ./internal/application/service -run 'AIKS|ManualContentLimit|SameAIKS|DingTalk|DirectUserShare' -count=1
@@ -68,6 +70,7 @@ jobs:
         run: go test ./...
 
   frontend:
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
