@@ -1,0 +1,164 @@
+name: aiks-weknora
+
+services:
+  postgres:
+    image: ${WEKNORA_POSTGRES_IMAGE:-paradedb/paradedb:v0.22.6-pg17}
+    container_name: ${WEKNORA_POSTGRES_CONTAINER_NAME:-weknora-postgres}
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-WeKnora}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-WeKnora}"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 1m
+    networks:
+      - aiks-team
+
+  redis:
+    image: ${WEKNORA_REDIS_IMAGE:-redis:7.0-alpine}
+    container_name: ${WEKNORA_REDIS_CONTAINER_NAME:-weknora-redis}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${REDIS_PASSWORD}\" ping 2>/dev/null | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - aiks-team
+
+  docreader:
+    image: ${WEKNORA_DOCREADER_IMAGE:-aiks-weknora-docreader:team}
+    container_name: ${WEKNORA_DOCREADER_CONTAINER_NAME:-weknora-docreader}
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DOCREADER_IMAGE_OUTPUT_DIR: /tmp/docreader
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-100}
+      DOCREADER_GRPC_PORT: 50051
+      DOCREADER_GRPC_MAX_WORKERS: ${DOCREADER_GRPC_MAX_WORKERS:-4}
+      DOCREADER_GRPC_MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-100}
+      DOCREADER_PDF_RENDER_MAX_WORKERS: ${DOCREADER_PDF_RENDER_MAX_WORKERS:-1}
+      DOCREADER_PDF_RENDER_DPI: ${DOCREADER_PDF_RENDER_DPI:-200}
+      DOCREADER_PDF_JPEG_QUALITY: ${DOCREADER_PDF_JPEG_QUALITY:-85}
+      DOCREADER_PDF_RENDER_MAX_EDGE: ${DOCREADER_PDF_RENDER_MAX_EDGE:-2000}
+    volumes:
+      - docreader-tmp:/tmp/docreader
+    expose:
+      - "50051"
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=127.0.0.1:50051"]
+      interval: 20s
+      timeout: 8s
+      retries: 6
+      start_period: 45s
+    restart: unless-stopped
+    networks:
+      - aiks-team
+
+  app:
+    image: ${WEKNORA_APP_IMAGE:-aiks-weknora-app:team}
+    container_name: ${WEKNORA_APP_CONTAINER_NAME:-weknora-app}
+    env_file:
+      - .env
+    environment:
+      GIN_MODE: ${GIN_MODE:-release}
+      TZ: ${TZ:-Asia/Shanghai}
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      AUTO_RECOVER_DIRTY: ${AUTO_RECOVER_DIRTY:-true}
+
+      DB_DRIVER: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-WeKnora}
+
+      STREAM_MANAGER_TYPE: redis
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PREFIX: ${REDIS_PREFIX:-stream:}
+
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      LOCAL_STORAGE_BASE_DIR: /data/files
+      RETRIEVE_DRIVER: ${RETRIEVE_DRIVER:-postgres}
+
+      DOCREADER_ADDR: docreader:50051
+      DOCREADER_TRANSPORT: grpc
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-100}
+
+      WEKNORA_AUTH_DEFAULT_TENANT_MODE: ${WEKNORA_AUTH_DEFAULT_TENANT_MODE:-create_personal}
+      WEKNORA_TENANT_ENABLE_RBAC: ${WEKNORA_TENANT_ENABLE_RBAC:-true}
+      WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED: ${WEKNORA_TENANT_SELF_SERVICE_CREATION_ENABLED:-true}
+      WEKNORA_SANDBOX_DOCKER_ENABLED: "false"
+    volumes:
+      - data-files:/data/files
+      - docreader-tmp:/tmp/docreader:ro
+    ports:
+      - "${WEKNORA_APP_BIND:-127.0.0.1}:${WEKNORA_APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      docreader:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 20s
+      timeout: 8s
+      retries: 8
+      start_period: 60s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      aiks-team:
+        aliases:
+          - weknora-app
+
+  frontend:
+    image: ${WEKNORA_FRONTEND_IMAGE:-aiks-weknora-frontend:team}
+    container_name: ${WEKNORA_FRONTEND_CONTAINER_NAME:-weknora-frontend}
+    environment:
+      APP_HOST: app
+      APP_PORT: 8080
+      APP_SCHEME: http
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-100}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-zh-CN}
+    ports:
+      - "${WEKNORA_FRONTEND_BIND:-0.0.0.0}:${WEKNORA_FRONTEND_PORT:-80}:80"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - aiks-team
+
+volumes:
+  postgres-data:
+    name: ${WEKNORA_POSTGRES_VOLUME:-aiks-weknora-postgres}
+  redis-data:
+    name: ${WEKNORA_REDIS_VOLUME:-aiks-weknora-redis}
+  data-files:
+    name: ${WEKNORA_FILES_VOLUME:-aiks-weknora-files}
+  docreader-tmp:
+    name: ${WEKNORA_DOCREADER_VOLUME:-aiks-weknora-docreader}
+
+networks:
+  aiks-team:
+    external: true
+    name: ${AIKS_TEAM_NETWORK:-aiks-team-network}
