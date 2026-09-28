@@ -225,12 +225,17 @@
                 </t-button>
               </div>
 
-              <div v-if="oidcEnabled" class="oidc-divider">
+              <div v-if="oidcEnabled || dingtalkEnabled" class="oidc-divider">
                 <span>{{ $t('auth.orContinueWith') }}</span>
               </div>
 
-              <t-button v-if="oidcEnabled" theme="default" size="large" block :loading="oidcLoading" :disabled="loading"
-                class="oidc-button" @click="handleOIDCLogin">
+              <t-button v-if="dingtalkEnabled" theme="default" size="large" block :loading="dingtalkLoading"
+                :disabled="loading || oidcLoading" class="oidc-button" @click="handleDingTalkLogin">
+                {{ dingtalkLoading ? $t('auth.redirectingToOIDC') : dingtalkLoginText }}
+              </t-button>
+
+              <t-button v-if="oidcEnabled" theme="default" size="large" block :loading="oidcLoading"
+                :disabled="loading || dingtalkLoading" class="oidc-button" @click="handleOIDCLogin">
                 {{ oidcLoading ? $t('auth.redirectingToOIDC') : oidcLoginText }}
               </t-button>
             </t-form>
@@ -356,6 +361,7 @@ import {
   register,
   getOIDCAuthorizationURL,
   getOIDCConfig,
+  getDingTalkConfig,
   autoSetup,
   getAuthConfig,
   userInfoFromApi,
@@ -412,10 +418,13 @@ const registerFormRef = ref()
 // State management
 const loading = ref(false)
 const oidcLoading = ref(false)
+const dingtalkLoading = ref(false)
 const isRegisterMode = ref(false)
 const showLanguageMenu = ref(false)
 const oidcEnabled = ref(false)
 const oidcProviderName = ref('')
+const dingtalkEnabled = ref(false)
+const dingtalkProviderName = ref('')
 // registrationEnabled defaults to true so that on first paint the Register
 // link is visible; the actual mode is fetched from /auth/config in onMounted.
 // In invite_only mode the link/card are hidden.
@@ -449,6 +458,9 @@ const oidcLoginText = computed(() => {
   }
   return t('auth.oidcLogin')
 })
+const dingtalkLoginText = computed(() =>
+  t('auth.oidcLoginWithProvider', { provider: dingtalkProviderName.value || '钉钉' }),
+)
 const currentLangOption = computed(() => languageOptions.find(l => l.value === currentLanguage.value))
 
 // Login form data
@@ -612,6 +624,22 @@ const loadOIDCConfig = async () => {
   }
 }
 
+const loadDingTalkConfig = async () => {
+  try {
+    const response = await getDingTalkConfig()
+    dingtalkEnabled.value = !!response.success && !!response.enabled
+    dingtalkProviderName.value = response.provider_display_name || ''
+  } catch {
+    dingtalkEnabled.value = false
+    dingtalkProviderName.value = ''
+  }
+}
+
+const loadExternalLoginConfig = () => {
+  void loadOIDCConfig()
+  void loadDingTalkConfig()
+}
+
 // loadAuthConfig fetches /auth/config and caches whether self-service
 // registration is allowed. Failures fall back to "enabled" so a transient
 // network glitch doesn't lock new users out of an open deployment.
@@ -623,6 +651,20 @@ const loadAuthConfig = async () => {
   } catch {
     registrationEnabled.value = true
     complexPasswordEnabled.value = false
+  }
+}
+
+const handleDingTalkLogin = () => {
+  try {
+    dingtalkLoading.value = true
+    if (inviteToken.value) {
+      sessionStorage.setItem('weknora_pending_invite_token', inviteToken.value)
+    }
+    window.location.href = '/api/v1/auth/dingtalk/start'
+  } catch (error: any) {
+    console.error('DingTalk 登录跳转失败:', error)
+    MessagePlugin.error(error.message || t('auth.oidcLoginFailed'))
+    dingtalkLoading.value = false
   }
 }
 
@@ -781,13 +823,13 @@ onMounted(async () => {
         inviteLookup.value = resp.data
       } else {
         inviteLookupError.value = resp.message || t('inviteRegister.invalidBody')
-        loadOIDCConfig()
+        loadExternalLoginConfig()
         loadAuthConfig()
         return
       }
     } catch {
       inviteLookupError.value = t('inviteRegister.invalidBody')
-      loadOIDCConfig()
+      loadExternalLoginConfig()
       loadAuthConfig()
       return
     } finally {
@@ -805,7 +847,7 @@ onMounted(async () => {
     const inviteOnly = cfg.registration_mode === 'invite_only'
     registrationEnabled.value = !inviteOnly
     isRegisterMode.value = !inviteOnly
-    loadOIDCConfig()
+    loadExternalLoginConfig()
     return
   }
 
@@ -826,7 +868,7 @@ onMounted(async () => {
     // Auto-setup may be unavailable outside the native Lite shell.
   }
 
-  loadOIDCConfig()
+  loadExternalLoginConfig()
   loadAuthConfig()
 })
 </script>
