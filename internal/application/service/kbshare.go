@@ -72,6 +72,10 @@ func NewKBShareService(
 // whose own tenant role is Viewer cannot exceed OrgRoleViewer on any
 // shared resource, regardless of what the org-level grant said. Higher
 // roles (Contributor / Admin / Owner) pass through unchanged.
+func validDirectUserPermission(permission types.OrgMemberRole) bool {
+	return permission == types.OrgRoleViewer || permission == types.OrgRoleEditor
+}
+
 func applyTenantRoleCap(p types.OrgMemberRole, callerTenantRole types.TenantRole) types.OrgMemberRole {
 	if callerTenantRole == types.TenantRoleViewer && p.HasPermission(types.OrgRoleEditor) {
 		return types.OrgRoleViewer
@@ -176,7 +180,7 @@ func (s *kbShareService) ShareKnowledgeBaseToUser(
 	if targetUserID == "" || targetUserID == userID {
 		return nil, ErrCannotShareToSelf
 	}
-	if !permission.IsValid() {
+	if !validDirectUserPermission(permission) {
 		return nil, ErrInvalidRole
 	}
 	share := &types.KnowledgeBaseUserShare{
@@ -231,7 +235,7 @@ func (s *kbShareService) UpdateUserSharePermission(
 	if s.userShareRepo == nil {
 		return ErrUserSharingUnavailable
 	}
-	if !permission.IsValid() {
+	if !validDirectUserPermission(permission) {
 		return ErrInvalidRole
 	}
 	share, err := s.userShareRepo.GetUserShareByID(ctx, shareID)

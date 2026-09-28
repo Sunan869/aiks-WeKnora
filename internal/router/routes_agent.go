@@ -197,6 +197,7 @@ func RegisterOrganizationRoutes(r *gin.RouterGroup, orgHandler *handler.Organiza
 	{
 		kbUserShares.POST("", g.OwnedKBOrAdmin(), orgHandler.ShareKnowledgeBaseToUser)
 		kbUserShares.GET("", g.Viewer(), orgHandler.ListKBUserShares)
+		kbUserShares.GET("/candidates", g.OwnedKBOrAdmin(), orgHandler.SearchKBUserShareCandidates)
 		kbUserShares.PUT("/:share_id", g.OwnedKBOrAdmin(), orgHandler.UpdateUserSharePermission)
 		kbUserShares.DELETE("/:share_id", g.OwnedKBOrAdmin(), orgHandler.RemoveUserShare)
 	}

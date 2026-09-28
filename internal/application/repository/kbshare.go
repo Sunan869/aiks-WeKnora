@@ -267,7 +267,8 @@ func (r *kbShareRepository) ListUserSharesForUser(ctx context.Context, userID st
 	return shares, err
 }
 
-// CountSharesByKnowledgeBaseID counts all active organization and direct-user shares.
+// CountSharesByKnowledgeBaseID keeps the historical organization-share count.
+// Direct-user grants are listed by their dedicated API.
 func (r *kbShareRepository) CountSharesByKnowledgeBaseID(ctx context.Context, kbID string) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&types.KnowledgeBaseShare{}).

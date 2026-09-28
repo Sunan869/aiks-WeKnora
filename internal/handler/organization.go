@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 
@@ -1122,6 +1123,63 @@ func (h *OrganizationHandler) ShareKnowledgeBaseToUser(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": share})
+}
+
+
+func (h *OrganizationHandler) SearchKBUserShareCandidates(c *gin.Context) {
+	ctx := c.Request.Context()
+	kbID := c.Param("id")
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+	userID := c.GetString(types.UserIDContextKey.String())
+
+	// Prove ownership before exposing any user-directory result.
+	existing, err := h.shareService.ListUserSharesByKnowledgeBase(ctx, kbID, tenantID)
+	if err != nil {
+		if errors.Is(err, service.ErrKBNotFound) {
+			c.Error(apperrors.NewNotFoundError("Knowledge base not found"))
+		} else {
+			c.Error(apperrors.NewForbiddenError("Permission denied"))
+		}
+		return
+	}
+
+	query := strings.TrimSpace(c.Query("q"))
+	runes := utf8.RuneCountInString(query)
+	if runes < 2 || runes > 128 {
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": []any{}})
+		return
+	}
+	users, err := h.userService.SearchUsers(ctx, query, 10)
+	if err != nil {
+		logger.Errorf(ctx, "Failed to search direct-share candidates: %v", err)
+		c.Error(apperrors.NewInternalServerError("Failed to search users"))
+		return
+	}
+	shared := make(map[string]struct{}, len(existing))
+	for _, share := range existing {
+		if share != nil {
+			shared[share.TargetUserID] = struct{}{}
+		}
+	}
+	type candidate struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Email    string `json:"email"`
+		Avatar   string `json:"avatar,omitempty"`
+	}
+	result := make([]candidate, 0, len(users))
+	for _, user := range users {
+		if user == nil || !user.IsActive || user.ID == userID {
+			continue
+		}
+		if _, exists := shared[user.ID]; exists {
+			continue
+		}
+		result = append(result, candidate{
+			ID: user.ID, Username: user.Username, Email: user.Email, Avatar: user.Avatar,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
 }
 
 func (h *OrganizationHandler) ListKBUserShares(c *gin.Context) {
