@@ -101,7 +101,8 @@ func getJwtSecret() string {
 
 // userService implements the UserService interface
 type userService struct {
-	userRepo         interfaces.UserRepository
+	userRepo             interfaces.UserRepository
+	externalIdentityRepo interfaces.ExternalIdentityRepository
 	tokenRepo        interfaces.AuthTokenRepository
 	tenantService    interfaces.TenantService
 	memberService    interfaces.TenantMemberService
@@ -118,8 +119,10 @@ func NewUserService(
 	memberService interfaces.TenantMemberService,
 	systemSettingSvc interfaces.SystemSettingService,
 ) interfaces.UserService {
+	externalIdentityRepo, _ := userRepo.(interfaces.ExternalIdentityRepository)
 	return &userService{
-		userRepo:         userRepo,
+		userRepo:             userRepo,
+		externalIdentityRepo: externalIdentityRepo,
 		tokenRepo:        tokenRepo,
 		tenantService:    tenantService,
 		memberService:    memberService,
@@ -604,6 +607,9 @@ func (s *userService) LoginWithDingTalk(
 	redirectURI string,
 	provisioning types.TenantProvisioningMode,
 ) (*types.OIDCCallbackResponse, error) {
+	if s.externalIdentityRepo == nil {
+		return nil, errors.New("external identity repository is unavailable")
+	}
 	if strings.TrimSpace(authCode) == "" {
 		return nil, errors.New("authCode is required")
 	}
@@ -624,7 +630,7 @@ func (s *userService) LoginWithDingTalk(
 	}
 	subject := dingTalkSubject(info)
 
-	user, err := s.userRepo.GetUserByExternalIdentity(
+	user, err := s.externalIdentityRepo.GetUserByExternalIdentity(
 		ctx,
 		types.ExternalIdentityProviderDingTalk,
 		subject,
@@ -659,7 +665,7 @@ func (s *userService) LoginWithDingTalk(
 			isNewUser = true
 		}
 
-		bindErr := s.userRepo.BindExternalIdentity(ctx, &types.ExternalIdentity{
+		bindErr := s.externalIdentityRepo.BindExternalIdentity(ctx, &types.ExternalIdentity{
 			Provider: types.ExternalIdentityProviderDingTalk,
 			Subject:  subject,
 			UserID:   user.ID,
@@ -667,7 +673,7 @@ func (s *userService) LoginWithDingTalk(
 		if bindErr != nil {
 			// Concurrent first-login: resolve the binding winner rather than
 			// overwriting an immutable upstream identity.
-			linked, lookupErr := s.userRepo.GetUserByExternalIdentity(
+			linked, lookupErr := s.externalIdentityRepo.GetUserByExternalIdentity(
 				ctx,
 				types.ExternalIdentityProviderDingTalk,
 				subject,
