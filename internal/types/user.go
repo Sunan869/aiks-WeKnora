@@ -105,6 +105,17 @@ func (p *UserPreferences) Scan(value interface{}) error {
 	return json.Unmarshal(data, p)
 }
 
+// ExternalIdentity binds an immutable upstream subject to one local user.
+type ExternalIdentity struct {
+	Provider  string    `json:"provider" gorm:"type:varchar(50);primaryKey"`
+	Subject   string    `json:"subject" gorm:"type:varchar(255);primaryKey"`
+	UserID    string    `json:"user_id" gorm:"type:varchar(36);not null;index"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+const ExternalIdentityProviderDingTalk = "dingtalk"
+
 // User represents a user in the system
 type User struct {
 	// Unique identifier of the user
@@ -183,6 +194,20 @@ type OIDCConfigResponse struct {
 	Success             bool   `json:"success"`
 	Enabled             bool   `json:"enabled"`
 	ProviderDisplayName string `json:"provider_display_name,omitempty"`
+}
+
+type DingTalkConfigResponse struct {
+	Success             bool   `json:"success"`
+	Enabled             bool   `json:"enabled"`
+	ProviderDisplayName string `json:"provider_display_name,omitempty"`
+}
+
+type DingTalkAuthURLResponse struct {
+	Success             bool   `json:"success"`
+	ProviderDisplayName string `json:"provider_display_name,omitempty"`
+	AuthorizationURL    string `json:"authorization_url,omitempty"`
+	State               string `json:"state,omitempty"`
+	Nonce               string `json:"-"`
 }
 
 type OIDCCallbackResponse struct {
