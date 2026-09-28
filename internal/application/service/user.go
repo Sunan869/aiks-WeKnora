@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -103,11 +103,11 @@ func getJwtSecret() string {
 type userService struct {
 	userRepo             interfaces.UserRepository
 	externalIdentityRepo interfaces.ExternalIdentityRepository
-	tokenRepo        interfaces.AuthTokenRepository
-	tenantService    interfaces.TenantService
-	memberService    interfaces.TenantMemberService
-	config           *config.Config
-	systemSettingSvc interfaces.SystemSettingService
+	tokenRepo            interfaces.AuthTokenRepository
+	tenantService        interfaces.TenantService
+	memberService        interfaces.TenantMemberService
+	config               *config.Config
+	systemSettingSvc     interfaces.SystemSettingService
 }
 
 // NewUserService creates a new user service instance
@@ -123,11 +123,11 @@ func NewUserService(
 	return &userService{
 		userRepo:             userRepo,
 		externalIdentityRepo: externalIdentityRepo,
-		tokenRepo:        tokenRepo,
-		tenantService:    tenantService,
-		memberService:    memberService,
-		config:           configInfo,
-		systemSettingSvc: systemSettingSvc,
+		tokenRepo:            tokenRepo,
+		tenantService:        tenantService,
+		memberService:        memberService,
+		config:               configInfo,
+		systemSettingSvc:     systemSettingSvc,
 	}
 }
 
