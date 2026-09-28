@@ -19,9 +19,9 @@ var (
 	ErrKBNotFound            = errors.New("knowledge base not found")
 	ErrNotKBOwner            = errors.New("only knowledge base owner can share")
 	// ErrOrgRoleCannotShare: only editors and admins (in tenant's org role) may share KBs to that org; viewers cannot
-	ErrOrgRoleCannotShare    = errors.New("only editors and admins can share knowledge bases to this organization")
-	ErrUserShareNotFound     = errors.New("direct user share not found")
-	ErrCannotShareToSelf     = errors.New("cannot share a knowledge base to yourself")
+	ErrOrgRoleCannotShare     = errors.New("only editors and admins can share knowledge bases to this organization")
+	ErrUserShareNotFound      = errors.New("direct user share not found")
+	ErrCannotShareToSelf      = errors.New("cannot share a knowledge base to yourself")
 	ErrUserSharingUnavailable = errors.New("direct user sharing is unavailable")
 )
 
@@ -41,10 +41,10 @@ type kbShareService struct {
 	shareRepo     interfaces.KBShareRepository
 	userShareRepo interfaces.KBUserShareRepository
 	orgRepo       interfaces.OrganizationRepository
-	kbRepo    interfaces.KnowledgeBaseRepository
-	kgRepo    interfaces.KnowledgeRepository
-	chunkRepo interfaces.ChunkRepository
-	audit     interfaces.AuditLogService
+	kbRepo        interfaces.KnowledgeBaseRepository
+	kgRepo        interfaces.KnowledgeRepository
+	chunkRepo     interfaces.ChunkRepository
+	audit         interfaces.AuditLogService
 }
 
 // NewKBShareService creates a new knowledge base share service
@@ -61,10 +61,10 @@ func NewKBShareService(
 		shareRepo:     shareRepo,
 		userShareRepo: userShareRepo,
 		orgRepo:       orgRepo,
-		kbRepo:    kbRepo,
-		kgRepo:    kgRepo,
-		chunkRepo: chunkRepo,
-		audit:     audit,
+		kbRepo:        kbRepo,
+		kgRepo:        kgRepo,
+		chunkRepo:     chunkRepo,
+		audit:         audit,
 	}
 }
 
@@ -157,7 +157,6 @@ func (s *kbShareService) ShareKnowledgeBase(ctx context.Context, kbID string, or
 		map[string]any{"organization_id": orgID, "permission": permission})
 	return share, nil
 }
-
 
 func (s *kbShareService) ShareKnowledgeBaseToUser(
 	ctx context.Context,
