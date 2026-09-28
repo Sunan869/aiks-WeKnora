@@ -3958,6 +3958,7 @@ export default {
     requestInfoEmpty: '暂无请求信息',
     channelWeb: '网页',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelIm: 'IM',
     chunkLabel: '片段{index}:',
     navigateToDocument: '查看文档详情',
