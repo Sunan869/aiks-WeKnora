@@ -11,7 +11,9 @@ import (
 
 var (
 	ErrKBShareNotFound      = errors.New("knowledge base share not found")
-	ErrKBShareAlreadyExists = errors.New("knowledge base already shared to this organization")
+	ErrKBShareAlreadyExists     = errors.New("knowledge base already shared to this organization")
+	ErrKBUserShareNotFound      = errors.New("knowledge base user share not found")
+	ErrKBUserShareAlreadyExists = errors.New("knowledge base already shared to this user")
 )
 
 // kbShareRepository implements KBShareRepository interface
@@ -85,7 +87,12 @@ func (r *kbShareRepository) Delete(ctx context.Context, id string) error {
 
 // DeleteByKnowledgeBaseID soft deletes all share records for a knowledge base (e.g. when the KB is deleted)
 func (r *kbShareRepository) DeleteByKnowledgeBaseID(ctx context.Context, kbID string) error {
-	return r.db.WithContext(ctx).Where("knowledge_base_id = ?", kbID).Delete(&types.KnowledgeBaseShare{}).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("knowledge_base_id = ?", kbID).Delete(&types.KnowledgeBaseShare{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("knowledge_base_id = ?", kbID).Delete(&types.KnowledgeBaseUserShare{}).Error
+	})
 }
 
 // DeleteByOrganizationID soft deletes all share records for an organization (e.g. when the org is deleted)
@@ -188,7 +195,79 @@ func (r *kbShareRepository) ListSharedKBsForTenant(ctx context.Context, tenantID
 	return shares, nil
 }
 
-// CountSharesByKnowledgeBaseID counts the number of organizations a knowledge base is shared with
+
+// CreateUserShare creates one direct user share.
+func (r *kbShareRepository) CreateUserShare(ctx context.Context, share *types.KnowledgeBaseUserShare) error {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&types.KnowledgeBaseUserShare{}).
+		Where("knowledge_base_id = ? AND target_user_id = ? AND deleted_at IS NULL", share.KnowledgeBaseID, share.TargetUserID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return ErrKBUserShareAlreadyExists
+	}
+	return r.db.WithContext(ctx).Create(share).Error
+}
+
+func (r *kbShareRepository) GetUserShareByID(ctx context.Context, id string) (*types.KnowledgeBaseUserShare, error) {
+	var share types.KnowledgeBaseUserShare
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&share).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrKBUserShareNotFound
+		}
+		return nil, err
+	}
+	return &share, nil
+}
+
+func (r *kbShareRepository) GetUserShareByKBAndUser(ctx context.Context, kbID string, userID string) (*types.KnowledgeBaseUserShare, error) {
+	var share types.KnowledgeBaseUserShare
+	if err := r.db.WithContext(ctx).
+		Where("knowledge_base_id = ? AND target_user_id = ?", kbID, userID).
+		First(&share).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrKBUserShareNotFound
+		}
+		return nil, err
+	}
+	return &share, nil
+}
+
+func (r *kbShareRepository) UpdateUserShare(ctx context.Context, share *types.KnowledgeBaseUserShare) error {
+	return r.db.WithContext(ctx).Model(&types.KnowledgeBaseUserShare{}).
+		Where("id = ?", share.ID).Updates(share).Error
+}
+
+func (r *kbShareRepository) DeleteUserShare(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&types.KnowledgeBaseUserShare{}).Error
+}
+
+func (r *kbShareRepository) ListUserSharesByKnowledgeBase(ctx context.Context, kbID string) ([]*types.KnowledgeBaseUserShare, error) {
+	var shares []*types.KnowledgeBaseUserShare
+	err := r.db.WithContext(ctx).
+		Preload("TargetUser").
+		Where("knowledge_base_id = ?", kbID).
+		Order("created_at DESC").
+		Find(&shares).Error
+	return shares, err
+}
+
+func (r *kbShareRepository) ListUserSharesForUser(ctx context.Context, userID string) ([]*types.KnowledgeBaseUserShare, error) {
+	if userID == "" {
+		return nil, nil
+	}
+	var shares []*types.KnowledgeBaseUserShare
+	err := r.db.WithContext(ctx).
+		Joins("JOIN knowledge_bases ON knowledge_bases.id = kb_user_shares.knowledge_base_id AND knowledge_bases.deleted_at IS NULL").
+		Preload("KnowledgeBase").
+		Where("kb_user_shares.target_user_id = ? AND kb_user_shares.deleted_at IS NULL", userID).
+		Order("kb_user_shares.created_at DESC").
+		Find(&shares).Error
+	return shares, err
+}
+
+// CountSharesByKnowledgeBaseID counts all active organization and direct-user shares.
 func (r *kbShareRepository) CountSharesByKnowledgeBaseID(ctx context.Context, kbID string) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&types.KnowledgeBaseShare{}).

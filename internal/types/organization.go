@@ -223,6 +223,26 @@ func (KnowledgeBaseShare) TableName() string {
 	return "kb_shares"
 }
 
+// KnowledgeBaseUserShare represents a direct identity-level share to one user.
+// It is deliberately separate from kb_shares so organization semantics and
+// tenant-wide membership remain unchanged.
+type KnowledgeBaseUserShare struct {
+	ID              string         `json:"id" gorm:"type:varchar(36);primaryKey"`
+	KnowledgeBaseID string         `json:"knowledge_base_id" gorm:"type:varchar(36);not null;index"`
+	TargetUserID    string         `json:"target_user_id" gorm:"type:varchar(36);not null;index"`
+	SharedByUserID  string         `json:"shared_by_user_id" gorm:"type:varchar(36);not null"`
+	SourceTenantID  uint64         `json:"source_tenant_id" gorm:"not null;index"`
+	Permission      OrgMemberRole  `json:"permission" gorm:"type:varchar(32);not null;default:'viewer'"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	DeletedAt       gorm.DeletedAt `json:"deleted_at" gorm:"index"`
+
+	KnowledgeBase *KnowledgeBase `json:"knowledge_base,omitempty" gorm:"foreignKey:KnowledgeBaseID"`
+	TargetUser    *User          `json:"target_user,omitempty" gorm:"foreignKey:TargetUserID"`
+}
+
+func (KnowledgeBaseUserShare) TableName() string { return "kb_user_shares" }
+
 // SharedKnowledgeBaseInfo represents a shared knowledge base with additional sharing info
 type SharedKnowledgeBaseInfo struct {
 	KnowledgeBase  *KnowledgeBase `json:"knowledge_base"`
@@ -232,6 +252,8 @@ type SharedKnowledgeBaseInfo struct {
 	Permission     OrgMemberRole  `json:"permission"`
 	SourceTenantID uint64         `json:"source_tenant_id"`
 	SharedAt       time.Time      `json:"shared_at"`
+	ShareKind      string         `json:"share_kind,omitempty"`       // organization | user
+	SharedToUserID string         `json:"shared_to_user_id,omitempty"`
 }
 
 // AgentShare represents a sharing record of an agent to an organization
@@ -392,6 +414,12 @@ type ShareKnowledgeBaseRequest struct {
 	Permission     OrgMemberRole `json:"permission" binding:"required"`
 }
 
+// ShareKnowledgeBaseToUserRequest shares a KB directly to one existing user.
+type ShareKnowledgeBaseToUserRequest struct {
+	UserID     string        `json:"user_id" binding:"required"`
+	Permission OrgMemberRole `json:"permission" binding:"required"`
+}
+
 // UpdateSharePermissionRequest represents a request to update share permission
 type UpdateSharePermissionRequest struct {
 	Permission OrgMemberRole `json:"permission" binding:"required"`
@@ -480,6 +508,19 @@ type KnowledgeBaseShareResponse struct {
 	MyPermission      string    `json:"my_permission"`  // Effective permission for current user = min(Permission, MyRoleInOrg)
 	CreatedAt         time.Time `json:"created_at"`
 	RequireApproval   bool      `json:"require_approval"`
+}
+
+// KnowledgeBaseUserShareResponse is the owner-side projection of a direct share.
+type KnowledgeBaseUserShareResponse struct {
+	ID             string    `json:"id"`
+	KnowledgeBaseID string    `json:"knowledge_base_id"`
+	TargetUserID   string    `json:"target_user_id"`
+	TargetUsername string    `json:"target_username,omitempty"`
+	TargetEmail    string    `json:"target_email,omitempty"`
+	SharedByUserID string    `json:"shared_by_user_id"`
+	SourceTenantID uint64    `json:"source_tenant_id"`
+	Permission     string    `json:"permission"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // AgentShareResponse represents an agent share record in API responses

@@ -109,6 +109,13 @@ type KBShareService interface {
 	UpdateSharePermission(ctx context.Context, shareID string, permission types.OrgMemberRole, userID string, tenantID uint64) error
 	RemoveShare(ctx context.Context, shareID string, userID string, tenantID uint64) error
 
+	// Direct user share management. These grants follow the authenticated user
+	// identity rather than the active workspace.
+	ShareKnowledgeBaseToUser(ctx context.Context, kbID string, targetUserID string, userID string, tenantID uint64, permission types.OrgMemberRole) (*types.KnowledgeBaseUserShare, error)
+	UpdateUserSharePermission(ctx context.Context, kbID string, shareID string, permission types.OrgMemberRole, userID string, tenantID uint64) error
+	RemoveUserShare(ctx context.Context, kbID string, shareID string, userID string, tenantID uint64) error
+	ListUserSharesByKnowledgeBase(ctx context.Context, kbID string, tenantID uint64) ([]*types.KnowledgeBaseUserShare, error)
+
 	// Query
 	// ListSharesByKnowledgeBase lists shares for a KB; tenantID must own the KB (authz check).
 	ListSharesByKnowledgeBase(ctx context.Context, kbID string, tenantID uint64) ([]*types.KnowledgeBaseShare, error)
@@ -167,6 +174,19 @@ type KBShareRepository interface {
 	// Count shares
 	CountSharesByKnowledgeBaseID(ctx context.Context, kbID string) (int64, error)
 	CountSharesByKnowledgeBaseIDs(ctx context.Context, kbIDs []string) (map[string]int64, error)
+}
+
+// KBUserShareRepository is the optional direct-user extension implemented by
+// the production KB share repository. Keeping it separate preserves existing
+// organization-share test doubles and integrations.
+type KBUserShareRepository interface {
+	CreateUserShare(ctx context.Context, share *types.KnowledgeBaseUserShare) error
+	GetUserShareByID(ctx context.Context, id string) (*types.KnowledgeBaseUserShare, error)
+	GetUserShareByKBAndUser(ctx context.Context, kbID string, userID string) (*types.KnowledgeBaseUserShare, error)
+	UpdateUserShare(ctx context.Context, share *types.KnowledgeBaseUserShare) error
+	DeleteUserShare(ctx context.Context, id string) error
+	ListUserSharesByKnowledgeBase(ctx context.Context, kbID string) ([]*types.KnowledgeBaseUserShare, error)
+	ListUserSharesForUser(ctx context.Context, userID string) ([]*types.KnowledgeBaseUserShare, error)
 }
 
 // AgentShareService defines the agent sharing service interface.

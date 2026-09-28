@@ -19,7 +19,10 @@ var (
 	ErrKBNotFound            = errors.New("knowledge base not found")
 	ErrNotKBOwner            = errors.New("only knowledge base owner can share")
 	// ErrOrgRoleCannotShare: only editors and admins (in tenant's org role) may share KBs to that org; viewers cannot
-	ErrOrgRoleCannotShare = errors.New("only editors and admins can share knowledge bases to this organization")
+	ErrOrgRoleCannotShare    = errors.New("only editors and admins can share knowledge bases to this organization")
+	ErrUserShareNotFound     = errors.New("direct user share not found")
+	ErrCannotShareToSelf     = errors.New("cannot share a knowledge base to yourself")
+	ErrUserSharingUnavailable = errors.New("direct user sharing is unavailable")
 )
 
 // kbShareService implements KBShareService.
@@ -35,8 +38,9 @@ var (
 // — Viewer in your own tenant cannot write — even when the access is
 // routed through cross-tenant sharing.
 type kbShareService struct {
-	shareRepo interfaces.KBShareRepository
-	orgRepo   interfaces.OrganizationRepository
+	shareRepo     interfaces.KBShareRepository
+	userShareRepo interfaces.KBUserShareRepository
+	orgRepo       interfaces.OrganizationRepository
 	kbRepo    interfaces.KnowledgeBaseRepository
 	kgRepo    interfaces.KnowledgeRepository
 	chunkRepo interfaces.ChunkRepository
@@ -52,9 +56,11 @@ func NewKBShareService(
 	chunkRepo interfaces.ChunkRepository,
 	audit interfaces.AuditLogService,
 ) interfaces.KBShareService {
+	userShareRepo, _ := shareRepo.(interfaces.KBUserShareRepository)
 	return &kbShareService{
-		shareRepo: shareRepo,
-		orgRepo:   orgRepo,
+		shareRepo:     shareRepo,
+		userShareRepo: userShareRepo,
+		orgRepo:       orgRepo,
 		kbRepo:    kbRepo,
 		kgRepo:    kgRepo,
 		chunkRepo: chunkRepo,
@@ -146,6 +152,142 @@ func (s *kbShareService) ShareKnowledgeBase(ctx context.Context, kbID string, or
 		"knowledge_base_share", share.ID, types.AuditOutcomeSuccess,
 		map[string]any{"organization_id": orgID, "permission": permission})
 	return share, nil
+}
+
+
+func (s *kbShareService) ShareKnowledgeBaseToUser(
+	ctx context.Context,
+	kbID string,
+	targetUserID string,
+	userID string,
+	tenantID uint64,
+	permission types.OrgMemberRole,
+) (*types.KnowledgeBaseUserShare, error) {
+	if s.userShareRepo == nil {
+		return nil, ErrUserSharingUnavailable
+	}
+	kb, err := s.kbRepo.GetKnowledgeBaseByID(ctx, kbID)
+	if err != nil {
+		return nil, ErrKBNotFound
+	}
+	if kb.TenantID != tenantID {
+		return nil, ErrNotKBOwner
+	}
+	if targetUserID == "" || targetUserID == userID {
+		return nil, ErrCannotShareToSelf
+	}
+	if !permission.IsValid() {
+		return nil, ErrInvalidRole
+	}
+	share := &types.KnowledgeBaseUserShare{
+		ID: uuid.New().String(), KnowledgeBaseID: kbID, TargetUserID: targetUserID,
+		SharedByUserID: userID, SourceTenantID: tenantID, Permission: permission,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+	if err := s.userShareRepo.CreateUserShare(ctx, share); err != nil {
+		if !errors.Is(err, repository.ErrKBUserShareAlreadyExists) {
+			return nil, err
+		}
+		existing, lookupErr := s.userShareRepo.GetUserShareByKBAndUser(ctx, kbID, targetUserID)
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		existing.Permission = permission
+		existing.UpdatedAt = time.Now()
+		if err := s.userShareRepo.UpdateUserShare(ctx, existing); err != nil {
+			return nil, err
+		}
+		recordKBActivity(ctx, s.audit, tenantID, kbID, types.AuditActionKBSharePermissionChanged,
+			"knowledge_base_user_share", existing.ID, types.AuditOutcomeSuccess,
+			map[string]any{"target_user_id": targetUserID, "permission": permission})
+		return existing, nil
+	}
+	recordKBActivity(ctx, s.audit, tenantID, kbID, types.AuditActionKBShareAdded,
+		"knowledge_base_user_share", share.ID, types.AuditOutcomeSuccess,
+		map[string]any{"target_user_id": targetUserID, "permission": permission})
+	return share, nil
+}
+
+func (s *kbShareService) ListUserSharesByKnowledgeBase(
+	ctx context.Context, kbID string, tenantID uint64,
+) ([]*types.KnowledgeBaseUserShare, error) {
+	if s.userShareRepo == nil {
+		return nil, ErrUserSharingUnavailable
+	}
+	kb, err := s.kbRepo.GetKnowledgeBaseByID(ctx, kbID)
+	if err != nil {
+		return nil, ErrKBNotFound
+	}
+	if kb.TenantID != tenantID {
+		return nil, ErrNotKBOwner
+	}
+	return s.userShareRepo.ListUserSharesByKnowledgeBase(ctx, kbID)
+}
+
+func (s *kbShareService) UpdateUserSharePermission(
+	ctx context.Context, kbID string, shareID string, permission types.OrgMemberRole,
+	userID string, tenantID uint64,
+) error {
+	if s.userShareRepo == nil {
+		return ErrUserSharingUnavailable
+	}
+	if !permission.IsValid() {
+		return ErrInvalidRole
+	}
+	share, err := s.userShareRepo.GetUserShareByID(ctx, shareID)
+	if err != nil {
+		if errors.Is(err, repository.ErrKBUserShareNotFound) {
+			return ErrUserShareNotFound
+		}
+		return err
+	}
+	if share.KnowledgeBaseID != kbID || share.SourceTenantID != tenantID {
+		return ErrSharePermissionDenied
+	}
+	role := types.TenantRoleFromContext(ctx)
+	if !(role.HasPermission(types.TenantRoleAdmin) ||
+		(share.SharedByUserID == userID && role.HasPermission(types.TenantRoleContributor))) {
+		return ErrSharePermissionDenied
+	}
+	share.Permission = permission
+	share.UpdatedAt = time.Now()
+	if err := s.userShareRepo.UpdateUserShare(ctx, share); err != nil {
+		return err
+	}
+	recordKBActivity(ctx, s.audit, share.SourceTenantID, share.KnowledgeBaseID, types.AuditActionKBSharePermissionChanged,
+		"knowledge_base_user_share", share.ID, types.AuditOutcomeSuccess,
+		map[string]any{"target_user_id": share.TargetUserID, "permission": permission})
+	return nil
+}
+
+func (s *kbShareService) RemoveUserShare(
+	ctx context.Context, kbID string, shareID string, userID string, tenantID uint64,
+) error {
+	if s.userShareRepo == nil {
+		return ErrUserSharingUnavailable
+	}
+	share, err := s.userShareRepo.GetUserShareByID(ctx, shareID)
+	if err != nil {
+		if errors.Is(err, repository.ErrKBUserShareNotFound) {
+			return ErrUserShareNotFound
+		}
+		return err
+	}
+	if share.KnowledgeBaseID != kbID || share.SourceTenantID != tenantID {
+		return ErrSharePermissionDenied
+	}
+	role := types.TenantRoleFromContext(ctx)
+	if !(role.HasPermission(types.TenantRoleAdmin) ||
+		(share.SharedByUserID == userID && role.HasPermission(types.TenantRoleContributor))) {
+		return ErrSharePermissionDenied
+	}
+	if err := s.userShareRepo.DeleteUserShare(ctx, shareID); err != nil {
+		return err
+	}
+	recordKBActivity(ctx, s.audit, share.SourceTenantID, share.KnowledgeBaseID, types.AuditActionKBShareRemoved,
+		"knowledge_base_user_share", share.ID, types.AuditOutcomeSuccess,
+		map[string]any{"target_user_id": share.TargetUserID, "permission": share.Permission})
+	return nil
 }
 
 // UpdateSharePermission updates a share's permission. See canManageShare for
@@ -329,6 +471,7 @@ func (s *kbShareService) ListSharedKnowledgeBases(ctx context.Context, tenantID 
 
 		info := &types.SharedKnowledgeBaseInfo{
 			KnowledgeBase:  kb,
+			ShareKind:      "organization",
 			ShareID:        share.ID,
 			OrganizationID: share.OrganizationID,
 			OrgName:        "",
@@ -347,6 +490,42 @@ func (s *kbShareService) ListSharedKnowledgeBases(ctx context.Context, tenantID 
 		} else {
 			if effective.HasPermission(existing.Permission) && effective != existing.Permission {
 				kbInfoMap[kbID] = info
+			}
+		}
+	}
+
+	if s.userShareRepo != nil {
+		caller := types.CallerFromContext(ctx)
+		if caller.UserID != "" {
+			directShares, directErr := s.userShareRepo.ListUserSharesForUser(ctx, caller.UserID)
+			if directErr != nil {
+				return nil, directErr
+			}
+			for _, share := range directShares {
+				if share == nil || share.KnowledgeBase == nil || share.SourceTenantID == tenantID {
+					continue
+				}
+				effective := applyTenantRoleCap(share.Permission, callerTenantRole)
+				kb := share.KnowledgeBase
+				switch kb.Type {
+				case types.KnowledgeBaseTypeDocument:
+					if count, countErr := s.kgRepo.CountKnowledgeByKnowledgeBaseID(ctx, share.SourceTenantID, kb.ID); countErr == nil {
+						kb.KnowledgeCount = count
+					}
+				case types.KnowledgeBaseTypeFAQ:
+					if count, countErr := s.chunkRepo.CountChunksByKnowledgeBaseID(ctx, share.SourceTenantID, kb.ID); countErr == nil {
+						kb.ChunkCount = count
+					}
+				}
+				info := &types.SharedKnowledgeBaseInfo{
+					KnowledgeBase: kb, ShareID: share.ID, Permission: effective,
+					SourceTenantID: share.SourceTenantID, SharedAt: share.CreatedAt,
+					ShareKind: "user", SharedToUserID: share.TargetUserID,
+				}
+				existing, exists := kbInfoMap[kb.ID]
+				if !exists || (effective.HasPermission(existing.Permission) && effective != existing.Permission) {
+					kbInfoMap[kb.ID] = info
+				}
 			}
 		}
 	}
@@ -508,6 +687,26 @@ func (s *kbShareService) CheckTenantKBPermission(ctx context.Context, kbID strin
 
 		if highest == "" || effective.HasPermission(highest) {
 			highest = effective
+		}
+	}
+
+	if s.userShareRepo != nil {
+		caller := types.CallerFromContext(ctx)
+		if caller.UserID != "" {
+			directShares, directErr := s.userShareRepo.ListUserSharesByKnowledgeBase(ctx, kbID)
+			if directErr != nil {
+				return "", false, directErr
+			}
+			for _, share := range directShares {
+				if share == nil || share.TargetUserID != caller.UserID {
+					continue
+				}
+				isShared = true
+				effective := applyTenantRoleCap(share.Permission, callerTenantRole)
+				if highest == "" || effective.HasPermission(highest) {
+					highest = effective
+				}
+			}
 		}
 	}
 

@@ -1090,6 +1090,115 @@ func (h *OrganizationHandler) ShareKnowledgeBase(c *gin.Context) {
 	})
 }
 
+
+// ShareKnowledgeBaseToUser shares a knowledge base directly to one existing user.
+func (h *OrganizationHandler) ShareKnowledgeBaseToUser(c *gin.Context) {
+	ctx := c.Request.Context()
+	kbID := c.Param("id")
+	userID := c.GetString(types.UserIDContextKey.String())
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+
+	var req types.ShareKnowledgeBaseToUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(apperrors.NewValidationError("Invalid request parameters").WithDetails(err.Error()))
+		return
+	}
+	target, err := h.userService.GetUserByID(ctx, req.UserID)
+	if err != nil || target == nil || !target.IsActive {
+		c.Error(apperrors.NewNotFoundError("Target user not found"))
+		return
+	}
+	share, err := h.shareService.ShareKnowledgeBaseToUser(ctx, kbID, req.UserID, userID, tenantID, req.Permission)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrCannotShareToSelf):
+			c.Error(apperrors.NewValidationError("Cannot share a knowledge base to yourself"))
+		case errors.Is(err, service.ErrNotKBOwner), errors.Is(err, service.ErrSharePermissionDenied):
+			c.Error(apperrors.NewForbiddenError("Permission denied"))
+		default:
+			logger.Errorf(ctx, "Failed to share knowledge base to user: %v", err)
+			c.Error(apperrors.NewInternalServerError("Failed to share knowledge base"))
+		}
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"success": true, "data": share})
+}
+
+func (h *OrganizationHandler) ListKBUserShares(c *gin.Context) {
+	ctx := c.Request.Context()
+	kbID := c.Param("id")
+	tenantID := c.GetUint64(types.TenantIDContextKey.String())
+	shares, err := h.shareService.ListUserSharesByKnowledgeBase(ctx, kbID, tenantID)
+	if err != nil {
+		if errors.Is(err, service.ErrKBNotFound) {
+			c.Error(apperrors.NewNotFoundError("Knowledge base not found"))
+		} else if errors.Is(err, service.ErrNotKBOwner) {
+			c.Error(apperrors.NewForbiddenError("Only the knowledge base owner can list its shares"))
+		} else {
+			logger.Errorf(ctx, "Failed to list direct user shares: %v", err)
+			c.Error(apperrors.NewInternalServerError("Failed to list direct user shares"))
+		}
+		return
+	}
+	response := make([]types.KnowledgeBaseUserShareResponse, 0, len(shares))
+	for _, share := range shares {
+		item := types.KnowledgeBaseUserShareResponse{
+			ID: share.ID, KnowledgeBaseID: share.KnowledgeBaseID,
+			TargetUserID: share.TargetUserID, SharedByUserID: share.SharedByUserID,
+			SourceTenantID: share.SourceTenantID, Permission: string(share.Permission),
+			CreatedAt: share.CreatedAt,
+		}
+		if share.TargetUser != nil {
+			item.TargetUsername = share.TargetUser.Username
+			item.TargetEmail = share.TargetUser.Email
+		}
+		response = append(response, item)
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"shares": response, "total": len(response),
+	}})
+}
+
+func (h *OrganizationHandler) UpdateUserSharePermission(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req types.UpdateSharePermissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(apperrors.NewValidationError("Invalid request parameters").WithDetails(err.Error()))
+		return
+	}
+	err := h.shareService.UpdateUserSharePermission(
+		ctx, c.Param("id"), c.Param("share_id"), req.Permission,
+		c.GetString(types.UserIDContextKey.String()),
+		c.GetUint64(types.TenantIDContextKey.String()),
+	)
+	if err != nil {
+		if errors.Is(err, service.ErrUserShareNotFound) {
+			c.Error(apperrors.NewNotFoundError("Direct user share not found"))
+		} else {
+			c.Error(apperrors.NewForbiddenError("Permission denied or invalid operation"))
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (h *OrganizationHandler) RemoveUserShare(c *gin.Context) {
+	err := h.shareService.RemoveUserShare(
+		c.Request.Context(), c.Param("id"), c.Param("share_id"),
+		c.GetString(types.UserIDContextKey.String()),
+		c.GetUint64(types.TenantIDContextKey.String()),
+	)
+	if err != nil {
+		if errors.Is(err, service.ErrUserShareNotFound) {
+			c.Error(apperrors.NewNotFoundError("Direct user share not found"))
+		} else {
+			c.Error(apperrors.NewForbiddenError("Permission denied or invalid operation"))
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
 // ListKBShares lists all shares for a knowledge base
 // @Summary      获取知识库的共享列表
 // @Description  获取知识库的所有共享记录

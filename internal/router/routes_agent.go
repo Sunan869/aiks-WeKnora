@@ -191,6 +191,16 @@ func RegisterOrganizationRoutes(r *gin.RouterGroup, orgHandler *handler.Organiza
 		kbShares.DELETE("/:share_id", g.OwnedKBOrAdmin(), orgHandler.RemoveShare)
 	}
 
+	// Direct user sharing is identity-scoped rather than organization-scoped.
+	// Mutation uses the same owner/admin boundary as organization sharing.
+	kbUserShares := g.apiKeyGroup(r.Group("/knowledge-bases/:id/user-shares"), apiKeyFullAccess())
+	{
+		kbUserShares.POST("", g.OwnedKBOrAdmin(), orgHandler.ShareKnowledgeBaseToUser)
+		kbUserShares.GET("", g.Viewer(), orgHandler.ListKBUserShares)
+		kbUserShares.PUT("/:share_id", g.OwnedKBOrAdmin(), orgHandler.UpdateUserSharePermission)
+		kbUserShares.DELETE("/:share_id", g.OwnedKBOrAdmin(), orgHandler.RemoveUserShare)
+	}
+
 	// Agent sharing routes — same rationale as KB shares: 分享/取消分享
 	// 跟修改 agent 同等敏感，挂 OwnedAgentOrAdmin。
 	//
