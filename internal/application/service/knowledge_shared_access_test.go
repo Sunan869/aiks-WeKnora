@@ -30,6 +30,22 @@ func (f *fakeKBShareService) RemoveShare(context.Context, string, string, uint64
 	return errors.New("not implemented")
 }
 
+func (f *fakeKBShareService) ShareKnowledgeBaseToUser(context.Context, string, string, string, uint64, types.OrgMemberRole) (*types.KnowledgeBaseUserShare, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (f *fakeKBShareService) UpdateUserSharePermission(context.Context, string, string, types.OrgMemberRole, string, uint64) error {
+	return errors.New("not implemented")
+}
+
+func (f *fakeKBShareService) RemoveUserShare(context.Context, string, string, string, uint64) error {
+	return errors.New("not implemented")
+}
+
+func (f *fakeKBShareService) ListUserSharesByKnowledgeBase(context.Context, string, uint64) ([]*types.KnowledgeBaseUserShare, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (f *fakeKBShareService) ListSharesByKnowledgeBase(context.Context, string, uint64) ([]*types.KnowledgeBaseShare, error) {
 	return nil, errors.New("not implemented")
 }
