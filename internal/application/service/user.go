@@ -277,6 +277,9 @@ func (s *userService) Login(ctx context.Context, req *types.LoginRequest) (*type
 	// but tell the client they're in their home tenant.
 	logger.Info(ctx, "Generating tokens")
 	resolvedTenantID := s.resolveLoginTenantID(ctx, user)
+	if err := s.syncDingTalkDepartmentOrganizations(ctx, user, resolvedTenantID, info.UnionID); err != nil {
+		return nil, fmt.Errorf("failed to synchronize DingTalk department access: %w", err)
+	}
 	accessToken, refreshToken, err := s.generateTokensForTenant(ctx, user, resolvedTenantID)
 	if err != nil {
 		logger.Errorf(ctx, "Failed to generate tokens: %v", err)
