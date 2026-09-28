@@ -23,7 +23,7 @@
 # Pin by digest: compiled JS is shipped in the runtime image, so a floating
 # node tag could change production assets. This index includes linux/amd64
 # and linux/arm64 (Node 24 / Debian bookworm slim).
-FROM docker.1ms.run/node:24-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 
 WORKDIR /frontend
 
@@ -56,7 +56,7 @@ RUN npm run build
 # newer Alpine base (3.24+) fails to start on old hosts such as CentOS 7
 # (kernel 3.10 + old libseccomp), which broke v0.7.0. This digest is
 # nginx 1.30.3 / Alpine 3.23.5, the same base as the working v0.6.3 image.
-FROM docker.1ms.run/nginx:1.30.3-alpine
+FROM nginx:1.30.3-alpine
 
 COPY --from=builder /frontend/dist /usr/share/nginx/html
 

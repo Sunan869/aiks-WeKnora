@@ -1,5 +1,5 @@
 # Build extension and daemon from the same pinned source on the runtime architecture.
-FROM docker.1ms.run/node:24-bookworm-slim AS browserskill
+FROM node:24-bookworm-slim AS browserskill
 WORKDIR /build
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git python3 ca-certificates curl build-essential cmake pkg-config && \
@@ -15,7 +15,7 @@ ARG TARGETARCH
 RUN bash scripts/build_browserskill.sh /opt/weknora/browserskill "${TARGETOS}/${TARGETARCH}"
 
 # Build stage
-FROM docker.1ms.run/golang:1.26-bookworm AS builder
+FROM golang:1.26-bookworm AS builder
 
 WORKDIR /app
 
@@ -89,7 +89,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 RUN --mount=type=cache,target=/go/pkg/mod cp -r /go/pkg/mod/github.com/yanyiwu/ /app/yanyiwu/
 
 # Final stage
-FROM docker.1ms.run/debian:12.12-slim
+FROM debian:12.12-slim
 
 WORKDIR /app
 
