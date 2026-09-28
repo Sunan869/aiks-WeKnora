@@ -110,3 +110,17 @@ workspaces. The effective permission is still capped by the caller's current
 tenant role, so a tenant Viewer remains read-only even when the direct grant is
 `editor`. Organization shares continue to use the existing three-dimensional
 cap and are not changed by this extension.
+
+
+### Privacy boundary for collected sessions
+
+Direct user grants do not make a shared WeKnora workspace private internally:
+WeKnora still treats the workspace/tenant as its primary resource boundary.
+Therefore AIKS team ingestion must route each employee's sessions into that
+employee's own WeKnora workspace (or another workspace dedicated exclusively to
+that employee). A single company-wide ingestion KB is only suitable for a
+single-user proof of concept or intentionally shared data.
+
+The collector identity-routing layer is responsible for binding an authenticated
+AIKS uploader to the correct WeKnora workspace and KB. Sharing is applied only
+after this private placement.
