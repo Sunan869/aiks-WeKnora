@@ -40,3 +40,15 @@ func TestManualMetadataPreservesAIKSExternalID(t *testing.T) {
 		t.Fatalf("external id did not round-trip: %#v", loaded)
 	}
 }
+
+func TestManualContentLimitKeepsAIKSSeparateFromNormalManualInput(t *testing.T) {
+	if got := manualContentLimit(types.ChannelWeb); got != manualContentMaxLength {
+		t.Fatalf("web limit = %d, want %d", got, manualContentMaxLength)
+	}
+	if got := manualContentLimit(types.ChannelAIKS); got != aiksManualContentMaxLength {
+		t.Fatalf("AIKS limit = %d, want %d", got, aiksManualContentMaxLength)
+	}
+	if aiksManualContentMaxLength <= manualContentMaxLength {
+		t.Fatal("AIKS limit must be larger than the interactive manual limit")
+	}
+}

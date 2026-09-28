@@ -87,8 +87,9 @@ type knowledgeService struct {
 }
 
 const (
-	manualContentMaxLength = 200000
-	manualFileExtension    = ".md"
+	manualContentMaxLength     = 200000
+	aiksManualContentMaxLength = 2000000
+	manualFileExtension        = ".md"
 	faqImportBatchSize     = 50 // 每批处理的FAQ条目数
 )
 

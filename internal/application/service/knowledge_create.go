@@ -746,12 +746,22 @@ func (s *knowledgeService) CreateKnowledgeFromManual(ctx context.Context,
 		return nil, werrors.NewBadRequestError("请求内容不能为空")
 	}
 
+	normalizedChannel := defaultChannel(channel)
+	externalID, err := validateManualExternalID(normalizedChannel, payload.ExternalID)
+	if err != nil {
+		return nil, err
+	}
+	if normalizedChannel == types.ChannelAIKS && externalID == "" {
+		return nil, werrors.NewValidationError("AIKS 渠道必须提供 external_id")
+	}
+
 	cleanContent := secutils.CleanMarkdown(payload.Content)
 	if strings.TrimSpace(cleanContent) == "" {
 		return nil, werrors.NewValidationError("内容不能为空")
 	}
-	if len([]rune(cleanContent)) > manualContentMaxLength {
-		return nil, werrors.NewValidationError(fmt.Sprintf("内容长度超出限制（最多%d个字符）", manualContentMaxLength))
+	contentLimit := manualContentLimit(normalizedChannel)
+	if len([]rune(cleanContent)) > contentLimit {
+		return nil, werrors.NewValidationError(fmt.Sprintf("内容长度超出限制（最多%d个字符）", contentLimit))
 	}
 
 	safeTitle, ok := secutils.ValidateInput(payload.Title)
@@ -765,12 +775,6 @@ func (s *knowledgeService) CreateKnowledgeFromManual(ctx context.Context,
 	}
 	if status != types.ManualKnowledgeStatusDraft && status != types.ManualKnowledgeStatusPublish {
 		return nil, werrors.NewValidationError("状态仅支持 draft 或 publish")
-	}
-
-	normalizedChannel := defaultChannel(channel)
-	externalID, err := validateManualExternalID(normalizedChannel, payload.ExternalID)
-	if err != nil {
-		return nil, err
 	}
 
 	kb, err := s.kbService.GetKnowledgeBaseByID(ctx, kbID)
@@ -805,7 +809,8 @@ func (s *knowledgeService) CreateKnowledgeFromManual(ctx context.Context,
 				return nil, werrors.NewValidationError("external_id 已被非 AIKS 手工知识占用")
 			}
 			if previous, err := existing.ManualMetadata(); err == nil && previous != nil &&
-				previous.Content == cleanContent && previous.Status == status && existing.Title == title {
+				previous.Content == cleanContent && previous.Status == status &&
+				existing.Title == title && existing.ParseStatus != "failed" {
 				return existing, nil
 			}
 			return s.UpdateManualKnowledge(ctx, existing.ID, payload)
@@ -1215,6 +1220,13 @@ func usesSourceIdentityDuplicateCheck(channel string) bool {
 	default:
 		return false
 	}
+}
+
+func manualContentLimit(channel string) int {
+	if channel == types.ChannelAIKS {
+		return aiksManualContentMaxLength
+	}
+	return manualContentMaxLength
 }
 
 func validateManualExternalID(channel, value string) (string, error) {

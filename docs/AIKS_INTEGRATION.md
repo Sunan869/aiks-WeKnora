@@ -60,3 +60,12 @@ It is accepted only for the `aiks` channel and must use the fixed
 `aiks-` + 64 lowercase hex format. Updates preserve the identifier and reject
 attempts to change it. This keeps AIKS source identity server-side without
 putting raw local Session IDs into WeKnora metadata.
+
+
+## AIKS manual payload budget
+
+Interactive/manual knowledge keeps the upstream 200,000-character limit.
+A request using `channel: "aiks"` must include a valid stable
+`external_id` and may carry up to 2,000,000 characters. This larger budget
+is isolated to the AIKS ingestion contract so normal editor/API behavior is
+unchanged.
