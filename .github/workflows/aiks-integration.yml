@@ -38,12 +38,17 @@ jobs:
             internal/types/interfaces/organization.go
             internal/application/repository/user.go
             internal/application/repository/kbshare.go
+            internal/application/repository/kbshare_delete_test.go
+            internal/application/repository/dingtalk_org_sync.go
+            internal/application/repository/dingtalk_org_sync_test.go
             internal/application/repository/user_external_identity_test.go
             internal/application/service/knowledge.go
             internal/application/service/knowledge_create.go
             internal/application/service/aiks_external_id_test.go
             internal/application/service/user.go
             internal/application/service/user_dingtalk_test.go
+            internal/application/service/dingtalk_org_sync.go
+            internal/application/service/dingtalk_org_sync_test.go
             internal/application/service/kbshare.go
             internal/application/service/kb_user_share_test.go
             internal/handler/auth.go
@@ -60,7 +65,7 @@ jobs:
       - name: Root AIKS service tests
         run: |
           go test ./internal/application/service -run 'AIKS|ManualContentLimit|SameAIKS|DingTalk|DirectUserShare' -count=1
-          go test ./internal/application/repository -run 'ExternalIdentity|KBShare' -count=1
+          go test ./internal/application/repository -run 'ExternalIdentity|KBShare|DingTalk' -count=1
           go test ./internal/handler -run 'Organization|Share' -count=1
           go test ./internal/router -run 'RBAC|Route|APIKey' -count=1
           go test ./internal/types -count=1
