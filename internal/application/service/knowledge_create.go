@@ -386,7 +386,7 @@ func (s *knowledgeService) CreateKnowledgeFromURL(ctx context.Context,
 		TenantID:         tenantID,
 		KnowledgeBaseID:  kbID,
 		Type:             "url",
-		Channel:          defaultChannel(channel),
+		Channel:          normalizedChannel,
 		Title:            title,
 		Source:           url,
 		FileType:         "html",
@@ -788,6 +788,28 @@ func (s *knowledgeService) CreateKnowledgeFromManual(ctx context.Context,
 	title := safeTitle
 	if title == "" {
 		title = fmt.Sprintf("Knowledge-%s", now.Format("20060102-150405"))
+	}
+
+	// AIKS uses a stable opaque external_id so a retry after a lost HTTP
+	// response cannot create a duplicate knowledge row. The normal AIKS adapter
+	// serializes delivery, so this lookup also turns later source revisions into
+	// updates of the same manual knowledge entry.
+	if externalID != "" {
+		existing, err := s.repo.FindByMetadataKey(ctx, tenantID, kbID, "external_id", externalID)
+		if err != nil {
+			logger.Errorf(ctx, "Failed to resolve AIKS manual knowledge identity: %v", err)
+			return nil, err
+		}
+		if existing != nil {
+			if existing.Channel != types.ChannelAIKS || !existing.IsManual() {
+				return nil, werrors.NewValidationError("external_id 已被非 AIKS 手工知识占用")
+			}
+			if previous, err := existing.ManualMetadata(); err == nil && previous != nil &&
+				previous.Content == cleanContent && previous.Status == status && existing.Title == title {
+				return existing, nil
+			}
+			return s.UpdateManualKnowledge(ctx, existing.ID, payload)
+		}
 	}
 
 	fileName := ensureManualFileName(title)
