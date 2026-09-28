@@ -28,7 +28,9 @@ func (directOrgShareRepo) ListByKnowledgeBase(context.Context, string) ([]*types
 }
 
 type directUserShareRepo struct {
-	shares map[string]*types.KnowledgeBaseUserShare
+	shares            map[string]*types.KnowledgeBaseUserShare
+	permissionLookups int
+	listLookups       int
 }
 
 func newDirectUserShareRepo() *directUserShareRepo {
@@ -56,6 +58,7 @@ func (r *directUserShareRepo) GetUserShareByID(_ context.Context, id string) (*t
 }
 
 func (r *directUserShareRepo) GetUserShareByKBAndUser(_ context.Context, kbID, userID string) (*types.KnowledgeBaseUserShare, error) {
+	r.permissionLookups++
 	share := r.shares[kbID+":"+userID]
 	if share == nil {
 		return nil, repository.ErrKBUserShareNotFound
@@ -81,6 +84,7 @@ func (r *directUserShareRepo) DeleteUserShare(_ context.Context, id string) erro
 }
 
 func (r *directUserShareRepo) ListUserSharesByKnowledgeBase(_ context.Context, kbID string) ([]*types.KnowledgeBaseUserShare, error) {
+	r.listLookups++
 	var out []*types.KnowledgeBaseUserShare
 	for _, share := range r.shares {
 		if share.KnowledgeBaseID == kbID {
@@ -157,6 +161,8 @@ func TestDirectUserShareIsIdentityScopedAndViewerCapped(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, shared)
 	require.Equal(t, types.OrgRoleViewer, role)
+	require.Equal(t, 1, users.permissionLookups)
+	require.Zero(t, users.listLookups)
 
 	role, shared, err = svc.CheckTenantKBPermission(
 		directShareContext("bob", types.TenantRoleAdmin),
@@ -165,6 +171,8 @@ func TestDirectUserShareIsIdentityScopedAndViewerCapped(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, shared)
 	require.Empty(t, role)
+	require.Equal(t, 2, users.permissionLookups)
+	require.Zero(t, users.listLookups)
 }
 
 func TestDirectUserShareRecipientCannotMutateOwnerGrant(t *testing.T) {
