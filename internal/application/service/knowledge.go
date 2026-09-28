@@ -90,7 +90,7 @@ const (
 	manualContentMaxLength     = 200000
 	aiksManualContentMaxLength = 2000000
 	manualFileExtension        = ".md"
-	faqImportBatchSize            = 50 // 每批处理的FAQ条目数
+	faqImportBatchSize         = 50 // 每批处理的FAQ条目数
 )
 
 // NewKnowledgeService creates a new knowledge service instance
