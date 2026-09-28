@@ -148,6 +148,21 @@ type ExternalIdentityRepository interface {
 	BindExternalIdentity(ctx context.Context, identity *types.ExternalIdentity) error
 }
 
+
+// DingTalkOrganizationSyncRepository is an optional capability implemented by
+// the production user repository. Keeping it separate from UserRepository
+// avoids forcing ordinary user-service test doubles to know about enterprise
+// directory synchronization.
+type DingTalkOrganizationSyncRepository interface {
+	SyncDingTalkOrganizationMemberships(
+		ctx context.Context,
+		userID string,
+		tenantID uint64,
+		corpID string,
+		desired []types.DingTalkOrganizationMembershipTarget,
+	) error
+}
+
 // AuthTokenRepository defines the auth token repository interface
 type AuthTokenRepository interface {
 	// CreateToken creates an auth token
