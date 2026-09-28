@@ -30,8 +30,9 @@ var liteSetupToken string
 func SetLiteSetupToken(token string) { liteSetupToken = token }
 
 const (
-	oidcNonceCookieName   = "weknora_oidc_nonce"
-	oidcNonceCookieMaxAge = 600
+	oidcNonceCookieName     = "weknora_oidc_nonce"
+	dingTalkNonceCookieName = "weknora_dingtalk_nonce"
+	oidcNonceCookieMaxAge   = 600
 )
 
 // AuthHandler implements HTTP request handlers for user authentication
@@ -338,6 +339,122 @@ func (h *AuthHandler) GetOIDCAuthorizationURL(c *gin.Context) {
 	setOIDCNonceCookie(c, resp.Nonce)
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func setDingTalkNonceCookie(c *gin.Context, nonce string) {
+	if nonce == "" {
+		return
+	}
+	secure := c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(dingTalkNonceCookieName, nonce, oidcNonceCookieMaxAge, "/", "", secure, true)
+}
+
+func dingTalkCallbackURL(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	return scheme + "://" + c.Request.Host + "/api/v1/auth/dingtalk/callback"
+}
+
+func (h *AuthHandler) GetDingTalkConfig(c *gin.Context) {
+	enabled := false
+	providerDisplayName := ""
+	if h.configInfo != nil && h.configInfo.DingTalkAuth != nil {
+		enabled = h.configInfo.DingTalkAuth.Enable
+		providerDisplayName = strings.TrimSpace(h.configInfo.DingTalkAuth.ProviderDisplayName)
+	}
+	c.JSON(http.StatusOK, &types.DingTalkConfigResponse{
+		Success:             true,
+		Enabled:             enabled,
+		ProviderDisplayName: providerDisplayName,
+	})
+}
+
+func (h *AuthHandler) DingTalkStart(c *gin.Context) {
+	ctx := c.Request.Context()
+	resp, err := h.userService.GetDingTalkAuthorizationURL(ctx, dingTalkCallbackURL(c))
+	if err != nil {
+		logger.Errorf(ctx, "Failed to generate DingTalk authorization URL: %v", err)
+		c.Error(errors.NewForbiddenError("DingTalk authorization unavailable").WithDetails(err.Error()))
+		return
+	}
+	setDingTalkNonceCookie(c, resp.Nonce)
+	c.Redirect(http.StatusFound, resp.AuthorizationURL)
+}
+
+func decodeDingTalkState(raw string, req *http.Request) (*oidcStatePayload, error) {
+	payload, err := secutils.VerifyOIDCState(raw)
+	if err != nil {
+		return nil, err
+	}
+	cookieNonce, err := req.Cookie(dingTalkNonceCookieName)
+	if err != nil || cookieNonce == nil || strings.TrimSpace(cookieNonce.Value) == "" {
+		return nil, errors.NewValidationError("dingtalk nonce cookie missing")
+	}
+	if subtle.ConstantTimeCompare([]byte(cookieNonce.Value), []byte(payload.Nonce)) != 1 {
+		return nil, errors.NewValidationError("dingtalk nonce mismatch")
+	}
+	return &oidcStatePayload{
+		Nonce:       payload.Nonce,
+		RedirectURI: strings.TrimSpace(payload.RedirectURI),
+	}, nil
+}
+
+func (h *AuthHandler) DingTalkRedirectCallback(c *gin.Context) {
+	ctx := c.Request.Context()
+	frontendRedirectURI := "/"
+
+	if providerError := strings.TrimSpace(c.Query("error")); providerError != "" {
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape(providerError))
+		return
+	}
+
+	decodedState, err := decodeDingTalkState(strings.TrimSpace(c.Query("state")), c.Request)
+	if err != nil {
+		logger.Errorf(ctx, "Failed to decode DingTalk state: %v", err)
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("invalid_state"))
+		return
+	}
+
+	secure := c.Request.TLS != nil || strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(dingTalkNonceCookieName, "", -1, "/", "", secure, true)
+
+	authCode := strings.TrimSpace(c.Query("authCode"))
+	if authCode == "" {
+		// Some generic OAuth clients normalize DingTalk's authCode to code.
+		authCode = strings.TrimSpace(c.Query("code"))
+	}
+	if authCode == "" {
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("missing_auth_code"))
+		return
+	}
+
+	resp, err := h.userService.LoginWithDingTalk(
+		ctx,
+		authCode,
+		strings.TrimSpace(decodedState.RedirectURI),
+		h.resolveDefaultTenantMode(ctx),
+	)
+	if err != nil {
+		logger.Errorf(ctx, "Failed to complete DingTalk login: %v", err)
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("login_failed"))
+		return
+	}
+	if resp == nil || !resp.Success {
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("login_failed"))
+		return
+	}
+
+	payload, err := encodeOIDCCallbackPayload(resp)
+	if err != nil {
+		c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_error="+urlQueryEscape("payload_encode_failed"))
+		return
+	}
+	// Reuse the existing provider-neutral frontend login payload.
+	c.Redirect(http.StatusFound, frontendRedirectURI+"#oidc_result="+urlQueryEscape(payload))
 }
 
 // setOIDCNonceCookie binds the OIDC state nonce to this browser so an
