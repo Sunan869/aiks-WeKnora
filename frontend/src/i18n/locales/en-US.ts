@@ -4074,6 +4074,7 @@ export default {
     requestInfoEmpty: 'No request info available',
     channelWeb: 'Web',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelIm: 'IM',
     chunkLabel: 'Chunk {index}:',
     navigateToDocument: 'View document details',

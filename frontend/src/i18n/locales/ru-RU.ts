@@ -7150,6 +7150,7 @@ export default {
     channelLabel: 'Канал источника',
     channelWeb: 'Веб',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelBrowserExtension: 'Расширение браузера',
     channelWechat: 'WeChat',
     channelWecom: 'WeCom',

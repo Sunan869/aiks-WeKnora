@@ -7152,6 +7152,7 @@ export default {
     channelLabel: '来源渠道',
     channelWeb: '网页端',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelBrowserExtension: '浏览器插件',
     channelWechat: '微信',
     channelWecom: '企业微信',

@@ -4074,6 +4074,7 @@ export default {
     requestInfoEmpty: 'リクエスト情報はありません',
     channelWeb: 'Web',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelIm: 'IM',
     chunkLabel: 'チャンク{index}:',
     navigateToDocument: 'ドキュメント詳細を表示',

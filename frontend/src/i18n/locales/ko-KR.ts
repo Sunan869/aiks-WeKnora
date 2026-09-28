@@ -7150,6 +7150,7 @@ export default {
     channelLabel: '출처 채널',
     channelWeb: '웹',
     channelApi: 'API',
+    channelAiks: 'AIKS',
     channelBrowserExtension: '브라우저 확장',
     channelWechat: 'WeChat',
     channelWecom: 'WeCom',
