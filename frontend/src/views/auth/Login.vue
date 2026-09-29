@@ -602,10 +602,11 @@ const persistLoginResponse = async (response: any, skipRedirect = false) => {
     }
   }
 
-  // Pull runtime capabilities (including whether ordinary users may create
-  // workspaces) before entering the main UI so create actions never flash
-  // briefly when the deployment is invitation-only.
-  await authStore.refreshFromAuthMe()
+  // Login response already contains the user, active tenant and memberships
+  // required to enter the app. Refresh /auth/me in the background instead of
+  // blocking navigation: a slow or broken reconciliation must not strand a
+  // successfully authenticated user on the login page.
+  void authStore.refreshFromAuthMe()
   await nextTick()
   if (skipRedirect) return
   router.replace(authStore.hasValidTenant ? '/platform/knowledge-bases' : '/onboarding/workspace')
