@@ -68,6 +68,11 @@ func expireAIKSPairsLocked(now time.Time) {
 	}
 }
 
+func aiksDesktopNoStore(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
+}
+
 func ensureAIKSDesktop(
 	c *gin.Context,
 	kbService interfaces.KnowledgeBaseService,
@@ -322,6 +327,7 @@ func RegisterAIKSDesktopRoutes(
 	})
 
 	r.POST("/aiks/desktop/connect/exchange", func(c *gin.Context) {
+		aiksDesktopNoStore(c)
 		var req struct {
 			AttemptID string `json:"attempt_id"`
 			Verifier  string `json:"verifier"`
@@ -350,6 +356,7 @@ func RegisterAIKSDesktopRoutes(
 	})
 
 	r.POST("/aiks/desktop/bootstrap", g.Viewer(), func(c *gin.Context) {
+		aiksDesktopNoStore(c)
 		data, code, message := ensureAIKSDesktop(c, kbService, modelService, apiKeyService, userService)
 		if data == nil {
 			extra := gin.H{"success": false, "message": message}
