@@ -108,6 +108,16 @@ const persistOIDCLoginResponse = async (response: any) => {
 
   await syncOIDCUserContext()
 
+  // AIKS Desktop can use DingTalk/OIDC through the ordinary browser login.
+  // Return to its same-origin handoff page after the callback; never send the
+  // browser JWT back to the desktop process.
+  const desktopHandoff = sessionStorage.getItem('aiks_desktop_handoff')
+  if (desktopHandoff) {
+    sessionStorage.removeItem('aiks_desktop_handoff')
+    window.location.replace(desktopHandoff)
+    return
+  }
+
   // OIDC 跳转前暂存的邀请 token：拿到会话后兑换并进入对应空间。
   const pendingInviteToken = sessionStorage.getItem('weknora_pending_invite_token')
   if (pendingInviteToken) {

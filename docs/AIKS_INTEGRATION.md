@@ -34,6 +34,28 @@ The first integration deliberately reuses upstream APIs instead of adding an
 AIKS-specific ingestion endpoint. The AIKS service owns the
 `(source, external_session_id) -> knowledge_id` mapping.
 
+## Desktop automatic bootstrap
+
+The normal AIKS Desktop team flow does not require an operator to pre-create a
+knowledge base or paste a per-user API key.
+
+1. Desktop calls `POST /api/v1/aiks/desktop/connect/start` with a SHA-256
+   verifier hash and opens the returned same-origin `authorize_path`.
+2. The browser uses the normal WeKnora login session (including DingTalk) to
+   approve the pairing. The user's JWT remains in the browser.
+3. Approval creates or reuses the caller's private `AIKS Sessions` knowledge
+   base. An active embedding model is required when the KB must be created.
+4. WeKnora creates or repairs an `AIKS Desktop - <user>` tenant API key scoped
+   to that KB with the `retrieve` capability.
+5. Native Desktop exchanges the one-time verifier for
+   `tenant_id`, `knowledge_base_id`, `knowledge_base`, `api_key`,
+   `display_name`, and `capabilities`, then uses those values to bootstrap
+   the AIKS collector. The WebView never receives the API key.
+
+`POST /api/v1/aiks/desktop/bootstrap` exposes the same idempotent provisioning
+for an already authenticated browser session. Responses that can contain the
+Desktop API key are marked `Cache-Control: no-store`.
+
 ## Ownership boundary
 
 WeKnora owns user/workspace authentication, RBAC, sharing, audit, document
