@@ -48,17 +48,6 @@ func RegisterTenantRoutes(
 	auditLogHandler *handler.AuditLogHandler,
 	g *rbacGuards,
 ) {
-	// AIKS Desktop pairing lives beside tenant routes because it provisions
-	// the caller's private AIKS Sessions KB and tenant-scoped API key.
-	// start/browser/exchange are challenge-protected public endpoints;
-	// approve/bootstrap require the normal JWT session and remain API-key
-	// default-denied.
-	r.POST("/aiks/desktop/connect/start", handler.AIKSDesktopConnectStart)
-	r.GET("/aiks/desktop/connect/browser", handler.AIKSDesktopConnectBrowser)
-	r.POST("/aiks/desktop/connect/exchange", handler.AIKSDesktopConnectExchange)
-	r.POST("/aiks/desktop/connect/approve", handler.AIKSDesktopConnectApprove)
-	r.POST("/aiks/desktop/bootstrap", handler.AIKSDesktopBootstrap)
-
 	// Cross-tenant superuser endpoints — promoted from handler if-blocks
 	// to middleware.RequireCrossTenantAccess at the route layer.
 	g.apiKeyRoute(r, http.MethodGet, "/tenants/all",

@@ -257,7 +257,7 @@ func NewRouter(params RouterParams) *gin.Engine {
 		v1.Use(rbacGuards.apiKeyAuthorizer.Middleware())
 
 		RegisterAuthRoutes(v1, params.AuthHandler, rbacGuards)
-		RegisterAIKSDesktopRoutes(v1, params.KBService, params.ModelService, params.TenantAPIKeyService, rbacGuards)
+		RegisterAIKSDesktopRoutes(v1, params.KBService, params.ModelService, params.TenantAPIKeyService, params.UserService, rbacGuards)
 		RegisterTenantRoutes(v1, params.TenantHandler, params.TenantMemberHandler, params.TenantInvitationHandler, params.AuditLogHandler, rbacGuards)
 		RegisterMyInvitationRoutes(v1, params.TenantInvitationHandler)
 		RegisterKnowledgeBaseRoutes(v1, params.KBHandler, rbacGuards)
