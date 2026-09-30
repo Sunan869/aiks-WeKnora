@@ -1,65 +1,61 @@
-# Build extension and daemon from the same pinned source on the runtime architecture.
-FROM node:24-bookworm-slim AS browserskill
+# ============================================================
+# Shared Rust toolchain
+# ============================================================
+
 FROM rust:1.98.1-bookworm AS rusttoolchain
 
+
+# ============================================================
+# BrowserSkill build stage
+# ============================================================
+
+FROM node:24-bookworm-slim AS browserskill
+
 ARG APK_MIRROR_ARG
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 
 WORKDIR /build
 
-# Debian 国内镜像
+# Debian 国内镜像 + BrowserSkill 构建依赖
 RUN if [ -n "$APK_MIRROR_ARG" ]; then \
-    sed -i \
-    "s@deb.debian.org@$APK_MIRROR_ARG@g; \
-    s@security.debian.org@$APK_MIRROR_ARG@g" \
-    /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
+        sed -i \
+            "s@deb.debian.org@$APK_MIRROR_ARG@g; \
+             s@security.debian.org@$APK_MIRROR_ARG@g" \
+            /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
     fi && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-    git \
-    python3 \
-    ca-certificates \
-    curl \
-    build-essential \
-    cmake \
-    pkg-config && \
+        git \
+        python3 \
+        ca-certificates \
+        curl \
+        build-essential \
+        cmake \
+        pkg-config && \
     rm -rf /var/lib/apt/lists/*
 
-# Rust 国内镜像
+# 直接复用 rust:1.98.1-bookworm 中预装的 Rust/Cargo，不再运行 rustup 在线安装。
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
-    RUSTUP_DIST_SERVER=https://rsproxy.cn \
-    RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup \
-    PATH=/usr/local/cargo/bin:$PATH
+    RUSTUP_TOOLCHAIN=1.98.1 \
+    PATH=/usr/local/cargo/bin:$PATH \
+    NPM_CONFIG_REGISTRY=${NPM_REGISTRY}
 
-# 配置 Cargo 国内 crates.io 镜像
+COPY --from=rusttoolchain /usr/local/rustup /usr/local/rustup
+COPY --from=rusttoolchain /usr/local/cargo /usr/local/cargo
+
+# Cargo 国内 crates.io 镜像
 RUN mkdir -p /usr/local/cargo && \
     printf '%s\n' \
-    '[source.crates-io]' \
-    'replace-with = "rsproxy-sparse"' \
-    '' \
-    '[source.rsproxy-sparse]' \
-    'registry = "sparse+https://rsproxy.cn/index/"' \
-    '' \
-    '[net]' \
-    'git-fetch-with-cli = true' \
-    > /usr/local/cargo/config.toml
-
-# 不再访问 sh.rustup.rs
-# 先下载再执行，curl 失败时 Docker 构建会直接失败
-RUN curl \
-    --retry 5 \
-    --retry-delay 2 \
-    --connect-timeout 20 \
-    --proto '=https' \
-    --tlsv1.2 \
-    -fsSL \
-    https://rsproxy.cn/rustup-init.sh \
-    -o /tmp/rustup-init.sh && \
-    sh /tmp/rustup-init.sh \
-    -y \
-    --profile minimal \
-    --default-toolchain stable && \
-    rm -f /tmp/rustup-init.sh && \
+        '[source.crates-io]' \
+        'replace-with = "rsproxy-sparse"' \
+        '' \
+        '[source.rsproxy-sparse]' \
+        'registry = "sparse+https://rsproxy.cn/index/"' \
+        '' \
+        '[net]' \
+        'git-fetch-with-cli = true' \
+        > /usr/local/cargo/config.toml && \
     rustc --version && \
     cargo --version
 
@@ -68,9 +64,13 @@ COPY scripts/build_browserskill.sh scripts/browserskill-release.json ./scripts/
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN bash scripts/build_browserskill.sh \
-    /opt/weknora/browserskill \
-    "${TARGETOS}/${TARGETARCH}"
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/tmp/browserskill-target \
+    CARGO_TARGET_DIR=/tmp/browserskill-target \
+    bash scripts/build_browserskill.sh \
+        /opt/weknora/browserskill \
+        "${TARGETOS}/${TARGETARCH}"
 
 
 # ============================================================
@@ -83,6 +83,7 @@ WORKDIR /app
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
+    RUSTUP_TOOLCHAIN=1.98.1 \
     PATH=/usr/local/cargo/bin:$PATH
 
 COPY --from=rusttoolchain /usr/local/rustup /usr/local/rustup
@@ -174,8 +175,7 @@ ARG WITH_ANYDOC=1
 
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
-    RUSTUP_DIST_SERVER=https://rsproxy.cn \
-    RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup \
+    RUSTUP_TOOLCHAIN=1.98.1 \
     PATH=/usr/local/cargo/bin:$PATH
 
 
