@@ -32,7 +32,27 @@ output_dir="$(cd "$output_dir" && pwd)"
 build_dir="$(mktemp -d /tmp/weknora-bsk-build.XXXXXX)"
 trap 'rm -rf "$build_dir"' EXIT
 
-git clone --no-checkout https://github.com/Tencent/BrowserSkill.git "$build_dir/source"
+browser_skill_repo="https://github.com/Tencent/BrowserSkill.git"
+github_proxy_prefix="${GITHUB_PROXY_PREFIX:-https://githubproxy.cc/}"
+clone_ok=0
+
+for clone_url in "${github_proxy_prefix}${browser_skill_repo}" "${browser_skill_repo}"; do
+  for attempt in 1 2 3; do
+    rm -rf "$build_dir/source"
+    echo "Cloning BrowserSkill (attempt ${attempt}/3): ${clone_url}"
+    if git -c http.version=HTTP/1.1 clone --filter=blob:none --no-checkout "${clone_url}" "$build_dir/source"; then
+      clone_ok=1
+      break 2
+    fi
+    sleep $((attempt * 3))
+  done
+done
+
+if [ "$clone_ok" != "1" ]; then
+  echo "Failed to clone BrowserSkill from proxy and GitHub" >&2
+  exit 1
+fi
+
 git -C "$build_dir/source" checkout --detach "$source_commit"
 (
   cd "$build_dir/source"
@@ -51,7 +71,8 @@ cargo_target_dir="$(cd "$cargo_target_dir" && pwd)"
   cd "$build_dir/source"
   # Use the installed toolchain; do not let the checkout's moving "stable"
   # override force a network update during each application build.
-  RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-stable}" cargo build --locked --release -p bsk --target-dir "$cargo_target_dir"
+  RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.98.1}" \
+    cargo build --locked --release -p bsk --target-dir "$cargo_target_dir"
 )
 # Replace atomically: overwriting an executing inode can invalidate macOS code pages.
 staged_binary="$(mktemp "$output_dir/.bsk-XXXXXX")"
