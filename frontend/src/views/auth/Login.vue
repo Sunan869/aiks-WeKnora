@@ -609,6 +609,18 @@ const persistLoginResponse = async (response: any, skipRedirect = false) => {
   void authStore.refreshFromAuthMe()
   await nextTick()
   if (skipRedirect) return
+
+  // AIKS Desktop pairing opens this login page in the system browser. Once
+  // authentication succeeds, return to the same-origin handoff page instead
+  // of entering the normal management UI. The handoff page exchanges only
+  // the user's scoped Desktop credential; the JWT stays in the browser.
+  const desktopHandoff = sessionStorage.getItem('aiks_desktop_handoff')
+  if (desktopHandoff) {
+    sessionStorage.removeItem('aiks_desktop_handoff')
+    window.location.replace(desktopHandoff)
+    return
+  }
+
   router.replace(authStore.hasValidTenant ? '/platform/knowledge-bases' : '/onboarding/workspace')
 }
 

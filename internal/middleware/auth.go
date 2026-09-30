@@ -51,6 +51,12 @@ var noAuthAPI = map[string][]string{
 	"/api/v1/auth/dingtalk/config":    {"GET"},
 	"/api/v1/auth/dingtalk/start":     {"GET"},
 	"/api/v1/auth/dingtalk/callback":  {"GET"},
+	// AIKS Desktop browser handoff. start/exchange use a short-lived
+	// verifier challenge; browser is a same-origin bridge to the normal
+	// authenticated WeKnora login session.
+	"/api/v1/aiks/desktop/connect/start":    {"POST"},
+	"/api/v1/aiks/desktop/connect/browser":  {"GET"},
+	"/api/v1/aiks/desktop/connect/exchange": {"POST"},
 	"/api/v1/auth/oidc/url":           {"GET"},
 	"/api/v1/auth/oidc/start":         {"GET"},
 	"/api/v1/auth/oidc/callback":      {"GET"},
