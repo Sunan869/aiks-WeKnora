@@ -181,7 +181,6 @@ RUN python -m pip install \
     uv && \
     uv --version && \
     python -m uv sync \
-    --locked \
     --no-dev
 
 
