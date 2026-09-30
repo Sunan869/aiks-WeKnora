@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	aiksDesktopKBName   = "AIKS Sessions"
+	aiksDesktopKBName    = "AIKS Sessions"
 	aiksDesktopKeyPrefix = "aiks-desktop:"
 	aiksDesktopPairTTL   = 5 * time.Minute
 )
@@ -129,10 +129,11 @@ func (h *TenantHandler) AIKSDesktopConnectBrowser(c *gin.Context) {
 		return
 	}
 
+	launchHash := sha256.Sum256([]byte(launch))
 	aiksDesktopPairs.Lock()
 	attempt := aiksDesktopPairs.items[attemptID]
 	valid := attempt != nil && attempt.ExpiresAt.After(time.Now().UTC()) &&
-		subtle.ConstantTimeCompare(attempt.LaunchHash[:], sha256.Sum256([]byte(launch))[:]) == 1
+		subtle.ConstantTimeCompare(attempt.LaunchHash[:], launchHash[:]) == 1
 	aiksDesktopPairs.Unlock()
 	if !valid {
 		c.String(http.StatusGone, "AIKS Desktop login request expired")
@@ -294,17 +295,21 @@ func (h *TenantHandler) ensureAIKSDesktopBootstrap(ctx context.Context, user *ty
 			len(key.KnowledgeBaseIDs) == 1 && key.KnowledgeBaseIDs[0] == target.ID &&
 			len(key.Capabilities) == 1 && key.Capabilities[0] == string(types.APIKeyCapabilityRetrieve)
 		if !desired {
-			updated, updateErr := h.apiKeyService.UpdateAPIKey(ctx, interfaces.TenantAPIKeyUpdateRequest{
+			// Preserve the decrypted token returned by ListAPIKeys. The update
+			// operation changes only scope metadata and may return a projection
+			// whose secret field is not useful to callers.
+			existingToken := key.APIKey
+			if _, updateErr := h.apiKeyService.UpdateAPIKey(ctx, interfaces.TenantAPIKeyUpdateRequest{
 				TenantID: tenant.ID, APIKeyID: key.ID, Name: keyName,
 				FullAccess: false, KnowledgeBaseIDs: []string{target.ID},
 				Capabilities: []string{string(types.APIKeyCapabilityRetrieve)},
-			})
-			if updateErr != nil {
+			}); updateErr != nil {
 				return nil, updateErr
 			}
-			key = updated
+			token = existingToken
+		} else {
+			token = key.APIKey
 		}
-		token = key.APIKey
 		if token != "" {
 			break
 		}
