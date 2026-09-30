@@ -10,8 +10,12 @@ OUT_FILE="${OUT_DIR}/aiks-weknora-${TAG}.tar"
 APP_IMAGE="${WEKNORA_APP_IMAGE_REPO:-aiks-weknora-app}:${TAG}"
 FRONTEND_IMAGE="${WEKNORA_FRONTEND_IMAGE_REPO:-aiks-weknora-frontend}:${TAG}"
 DOCREADER_IMAGE="${WEKNORA_DOCREADER_IMAGE_REPO:-aiks-weknora-docreader}:${TAG}"
+
 POSTGRES_IMAGE="${WEKNORA_POSTGRES_IMAGE:-paradedb/paradedb:v0.22.6-pg17}"
 REDIS_IMAGE="${WEKNORA_REDIS_IMAGE:-redis:7.0-alpine}"
+
+# 国内 Docker Hub 镜像代理
+DOCKER_MIRROR="${DOCKER_MIRROR:-docker.1ms.run}"
 
 BASE_IMAGES=(
   "debian:12.12-slim"
@@ -26,12 +30,37 @@ BASE_IMAGES=(
 mkdir -p "$OUT_DIR"
 
 echo "[INFO] target platform: $PLATFORM"
-echo "[INFO] pulling official base/dependency images first"
+echo "[INFO] Docker mirror: $DOCKER_MIRROR"
+
+#
+# 从国内镜像源拉取，然后重新 tag 成 Dockerfile 使用的原始名称。
+#
+pull_from_mirror() {
+  local image="$1"
+  local mirror_image="${DOCKER_MIRROR}/${image}"
+
+  echo "[INFO] pulling: $mirror_image"
+
+  docker pull \
+    --platform "$PLATFORM" \
+    "$mirror_image"
+
+  echo "[INFO] tagging: $mirror_image -> $image"
+
+  docker tag \
+    "$mirror_image" \
+    "$image"
+}
+
+echo "[INFO] pulling base/dependency images from domestic mirror"
+
 for base in "${BASE_IMAGES[@]}"; do
-  docker pull --platform "$PLATFORM" "$base"
+  pull_from_mirror "$base"
 done
 
+
 echo "[INFO] building $APP_IMAGE using local base images"
+
 docker build \
   --platform "$PLATFORM" \
   --pull=false \
@@ -43,7 +72,9 @@ docker build \
   -f "${ROOT_DIR}/docker/Dockerfile.app" \
   "$ROOT_DIR"
 
+
 echo "[INFO] building $FRONTEND_IMAGE using local base images"
+
 docker build \
   --platform "$PLATFORM" \
   --pull=false \
@@ -52,7 +83,9 @@ docker build \
   -t "$FRONTEND_IMAGE" \
   "${ROOT_DIR}/frontend"
 
+
 echo "[INFO] building $DOCREADER_IMAGE using local base images"
+
 docker build \
   --platform "$PLATFORM" \
   --pull=false \
@@ -61,7 +94,9 @@ docker build \
   -f "${ROOT_DIR}/docker/Dockerfile.docreader" \
   "$ROOT_DIR"
 
+
 echo "[INFO] saving one offline bundle: $OUT_FILE"
+
 docker save -o "$OUT_FILE" \
   "$APP_IMAGE" \
   "$FRONTEND_IMAGE" \
@@ -69,5 +104,10 @@ docker save -o "$OUT_FILE" \
   "$POSTGRES_IMAGE" \
   "$REDIS_IMAGE"
 
-echo "[OK] $OUT_FILE"
-echo "Upload it to: deploy/server/images/"
+
+echo
+echo "[OK] offline image bundle generated:"
+echo "     $OUT_FILE"
+echo
+echo "Upload it to:"
+echo "     deploy/server/images/"
