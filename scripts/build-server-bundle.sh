@@ -22,6 +22,7 @@ BASE_IMAGES=(
   "golang:1.26-bookworm"
   "node:24-bookworm-slim"
   "python:3.10.18-bookworm"
+  "rust:1.98.1-bookworm"
   "nginx:1.30.3-alpine"
   "$POSTGRES_IMAGE"
   "$REDIS_IMAGE"
